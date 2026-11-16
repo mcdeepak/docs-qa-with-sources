@@ -22,8 +22,9 @@ locals {
     ANSWERER          = var.enable_ai ? "llm" : "extractive"
     SUPPORT_THRESHOLD = tostring(var.support_threshold)
     }, var.enable_ai ? {
-    LLM_BASE_URL = "${azurerm_cognitive_account.ai[0].endpoint}openai/deployments/${azurerm_cognitive_deployment.ai[0].name}"
-    LLM_MODEL    = var.ai_model.name
+    # Azure OpenAI's OpenAI-compatible v1 endpoint; the model name is the deployment name.
+    LLM_BASE_URL = "${azurerm_cognitive_account.ai[0].endpoint}openai/v1"
+    LLM_MODEL    = azurerm_cognitive_deployment.ai[0].name
   } : {})
 
   app_secrets = merge({
