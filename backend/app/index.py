@@ -94,9 +94,9 @@ class CorpusIndex:
             total += w
             if self.covers(t, chunk_pos):
                 got += w
-                matched.append(t.stem)
+                matched.append(t.word or t.stem)
             else:
-                missing.append(t.stem)
+                missing.append(t.word or t.stem)
         return (got / total if total else 0.0), matched, missing
 
 
