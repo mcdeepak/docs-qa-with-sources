@@ -1,0 +1,99 @@
+"""Decides in code whether an answer is supported. No model takes part.
+
+Two checks, both must pass:
+
+1. Coverage. The passage must contain enough of what the question asks about.
+   Each question term is weighed by how rare it is in the documents; a term found
+   in no document weighs the most. This is what stops "parental leave" being
+   answered from a passage that merely mentions "policy".
+
+2. Quote. Every quote the answerer returns must appear word for word in the stored
+   passage it cites, and that passage must have passed check 1. An answerer that
+   invents or paraphrases a quote loses it. With no quotes left, there is no answer.
+"""
+from dataclasses import dataclass, field
+
+from .answering import Draft
+from .config import settings
+from .index import CorpusIndex
+from .retrieval import Hit
+from .text import QueryTerm, normalise_ws
+
+
+@dataclass
+class ScoredHit:
+    hit: Hit
+    coverage: float
+    matched: list[str]
+    missing: list[str]
+
+
+@dataclass
+class Source:
+    scored: ScoredHit
+    quote: str
+    start: int   # position of the quote inside the passage text
+    end: int
+
+
+@dataclass
+class Decision:
+    supported: bool
+    reason: str
+    sources: list[Source] = field(default_factory=list)
+
+
+def score_hits(index: CorpusIndex, terms: list[QueryTerm], hits: list[Hit]) -> list[ScoredHit]:
+    scored = []
+    for h in hits:
+        coverage, matched, missing = index.coverage(terms, h.position)
+        scored.append(ScoredHit(h, coverage, matched, missing))
+    return scored
+
+
+def passing(scored: list[ScoredHit], threshold: float | None = None) -> list[ScoredHit]:
+    threshold = settings.support_threshold if threshold is None else threshold
+    return [s for s in scored if s.coverage >= threshold]
+
+
+def locate_quote(quote: str, passage: str) -> tuple[int, int] | None:
+    """Find a quote in a passage, ignoring differences in whitespace only."""
+    quote = normalise_ws(quote)
+    if not quote:
+        return None
+    pos = passage.find(quote)
+    if pos >= 0:
+        return pos, pos + len(quote)
+    # Map positions in the whitespace-normalised passage back to the original.
+    mapping, normalised, last_space = [], [], True
+    for i, ch in enumerate(passage):
+        if ch.isspace():
+            if not last_space:
+                normalised.append(" ")
+                mapping.append(i)
+            last_space = True
+        else:
+            normalised.append(ch)
+            mapping.append(i)
+            last_space = False
+    pos = "".join(normalised).find(quote)
+    if pos < 0:
+        return None
+    return mapping[pos], mapping[pos + len(quote) - 1] + 1
+
+
+def check_quotes(draft: Draft, allowed: list[ScoredHit]) -> Decision:
+    by_id = {s.hit.chunk.id: s for s in allowed}
+    sources, seen = [], set()
+    for q in draft.quotes:
+        scored = by_id.get(q.chunk_id)
+        if scored is None or q.chunk_id in seen:
+            continue
+        span = locate_quote(q.text, scored.hit.chunk.text)
+        if span is None:
+            continue
+        seen.add(q.chunk_id)
+        sources.append(Source(scored, scored.hit.chunk.text[span[0]:span[1]], span[0], span[1]))
+    if not sources or not draft.text.strip():
+        return Decision(False, "The answer could not be traced to an exact passage.")
+    return Decision(True, "ok", sources)
