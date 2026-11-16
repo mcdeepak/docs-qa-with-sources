@@ -48,6 +48,10 @@ def score_hits(index: CorpusIndex, terms: list[QueryTerm], hits: list[Hit]) -> l
     for h in hits:
         coverage, matched, missing = index.coverage(terms, h.position)
         scored.append(ScoredHit(h, coverage, matched, missing))
+    # Prefer the passage that covers more of the question; BM25 score breaks ties.
+    # Coverage is compared in steps of 0.05 so a hair's difference does not outrank
+    # a clearly better BM25 match.
+    scored.sort(key=lambda s: (-round(s.coverage * 20), -s.hit.score))
     return scored
 
 

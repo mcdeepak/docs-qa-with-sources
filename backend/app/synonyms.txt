@@ -1,14 +1,14 @@
 # One group per line. Words in a group are treated as the same word when matching a
 # question to a passage. Keep groups small and general: a wrong synonym produces a
 # wrong "supported" decision, which is worse than a refusal.
-keep, kept, retain, retained, retention, store, stored, hold, held
+keep, retain, retained, retention
 home, remote, remotely, offsite, telework
-stolen, theft, lost, missing
+steal, theft, lose, missing
 laptop, computer, device, notebook, pc
 phone, mobile, smartphone
-need, needed, require, required, mandatory, must, compulsory
-allow, allowed, permit, permitted, may, approved
-forbid, forbidden, prohibit, prohibited, banned, blocked
+require, required, mandatory, compulsory
+# Permission words are one group on purpose: "is X allowed?" is answered by "X is prohibited".
+allow, allowed, permit, permitted, approved, forbid, forbidden, prohibit, prohibited, banned, blocked
 usb, removable, flash, thumb
 drive, storage, media
 delete, deleted, remove, removed, erase, erased, purge, wipe, destroyed

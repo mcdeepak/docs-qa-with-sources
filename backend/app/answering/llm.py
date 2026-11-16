@@ -29,7 +29,10 @@ Rules:
 class LLMAnswerer:
     name = "llm"
 
-    def __init__(self, transport: httpx.BaseTransport | None = None):
+    def __init__(self, base_url: str | None = None, model: str | None = None,
+                 transport: httpx.BaseTransport | None = None):
+        self._base_url = settings.llm_base_url if base_url is None else base_url
+        self._model = settings.llm_model if model is None else model
         self._transport = transport
         self._fallback = ExtractiveAnswerer()
 
@@ -45,11 +48,11 @@ class LLMAnswerer:
             return draft
 
     def _ask_model(self, question: str, hits: list[Hit]) -> Draft:
-        if not settings.llm_base_url or not settings.llm_model:
+        if not self._base_url or not self._model:
             raise RuntimeError("LLM_BASE_URL and LLM_MODEL are not set")
         passages = "\n".join(f"[{i}] {h.chunk.text}" for i, h in enumerate(hits, start=1))
         body = {
-            "model": settings.llm_model,
+            "model": self._model,
             "temperature": 0,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -57,7 +60,7 @@ class LLMAnswerer:
             ],
         }
         headers = {"Authorization": f"Bearer {settings.llm_api_key}", "api-key": settings.llm_api_key}
-        url = settings.llm_base_url.rstrip("/") + "/chat/completions"
+        url = self._base_url.rstrip("/") + "/chat/completions"
         with httpx.Client(timeout=settings.llm_timeout_seconds, transport=self._transport) as client:
             response = client.post(url, json=body, headers=headers)
             response.raise_for_status()

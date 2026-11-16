@@ -20,6 +20,8 @@ class BM25Retriever:
             norm = K1 * (1 - B + B * index.length[pos] / (index.avg_length or 1.0))
             score = 0.0
             for t in terms:
+                if t.frame and index.quantity[pos]:
+                    score += index.term_weight(t)   # "how long" favours passages with a quantity
                 best = 0.0
                 for s in t.matches:
                     f = tf.get(s)
@@ -30,7 +32,7 @@ class BM25Retriever:
                         part *= SYNONYM_WEIGHT
                     best = max(best, part)
                 score += best
-            if score > 0:
+            if score > 0 and any(index.covers(t, pos) for t in terms if not t.frame):
                 hits.append(Hit(index.chunks[pos], pos, score))
         hits.sort(key=lambda h: (-h.score, h.chunk.id))
         return hits[:k]
