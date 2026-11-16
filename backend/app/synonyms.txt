@@ -23,3 +23,6 @@ visitor, guest
 cost, price, fee, charge
 holiday, vacation
 sick, ill, illness, unwell
+length, long
+minimum, least
+maximum, most, limit
