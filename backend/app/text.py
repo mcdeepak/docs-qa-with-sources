@@ -104,6 +104,7 @@ def _synonym_groups() -> dict[str, frozenset[str]]:
 @dataclass(frozen=True)
 class QueryTerm:
     stem: str
+    word: str = ""   # the word as the person typed it, for display
     # Stems that count as a match for this term, including itself.
     matches: frozenset = field(default_factory=frozenset)
     # A frame term asks for a quantity ("how long"). A passage with a number or a
@@ -128,7 +129,7 @@ def query_terms(question: str) -> list[QueryTerm]:
             matches.add(s[2:])                       # "uncollected" also matches "collected"
         if settings.use_synonyms:
             matches |= _synonym_groups().get(s, frozenset())
-        terms.append(QueryTerm(stem=s, matches=frozenset(matches), frame=frame))
+        terms.append(QueryTerm(stem=s, word=w, matches=frozenset(matches), frame=frame))
     return terms
 
 

@@ -1,6 +1,6 @@
 # Specification: Document Q&A with Sources
 
-Status: draft, written before implementation. Changes to behaviour are made here first.
+Status: written before implementation and kept up to date. Changes to behaviour are made here first.
 
 ## Problem
 
@@ -29,15 +29,21 @@ question and get an answer they can verify against the source.
 ## Data model
 
 - `documents(id, filename unique, active_version_id, created_at)`
-- `document_versions(id, document_id, sha256, version_no, status, error, stage, meta, uploaded_at)`
-- `chunks(id, version_id, ordinal, text, heading_path, page, clause, kind)`
-- `jobs(id, version_id, state, attempts, leased_until, last_error, created_at)`
+- `document_versions(id, document_id, version_no, sha256, content, status, error, title, doc_version, doc_owner, chunk_count, uploaded_at, indexed_at)`
+- `chunks(id, version_id, ordinal, kind, text, heading, page, clause, line)`
+- `jobs(id, version_id, state, attempts, run_after, leased_until, worker, last_error)`
+- `index_state(generation)`: bumped whenever the searchable set changes.
+
+File bytes are stored in `document_versions.content` so that saving a file and queuing
+its job commit together.
 
 ## Behaviour
 
 ### Upload and versions
 - A document's identity is its filename. Its content identity is the SHA-256 of its bytes.
 - Same filename, same hash: no new version, no new job. The existing document is returned.
+- Same hash under a different filename: nothing is created. The response names the
+  document that already holds the content.
 - Same filename, new hash: a new version is created and queued. The old version keeps
   serving answers until the new one is ready, then the active pointer moves and the old
   chunks are deleted in one transaction.
@@ -70,18 +76,27 @@ question and get an answer they can verify against the source.
 - Selected with `ANSWERER`.
 
 ### Support decision (always in code, after any answerer)
-1. Coverage gate: the rarity-weighted share of the question's informative terms found in
-   the top passage must reach `SUPPORT_THRESHOLD`. Terms absent from the whole corpus
-   count at maximum weight.
+1. Coverage gate: the rarity-weighted share of the question's words found in a passage
+   must reach `SUPPORT_THRESHOLD` (0.55).
+   - A word found in no document counts `ABSENT_TERM_WEIGHT` (2.0) times the rarest word.
+   - A quantity word after "how" (long, often, many) is satisfied by a passage that
+     contains a number or a frequency word.
+   - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
-   chunk it cites. Quotes that fail are dropped. No quotes left means not supported.
+   passage it cites, and that passage must have passed the coverage gate. Quotes that
+   fail are dropped. No quotes left means not supported.
+
+When the answer is not supported, the closest passages are returned separately and
+labelled as insufficient.
 
 ### API
 - `POST /api/login`
 - `POST /api/documents` (multipart) -> document, version, status
 - `GET /api/documents` -> list with status
 - `GET /api/documents/events` -> server-sent events of status changes
-- `POST /api/ask {question}` -> `{supported, answer, sources[{document, version, location, passage, highlight}], timings}`
+- `DELETE /api/documents/{id}`
+- `POST /api/ask {question}` -> `{supported, answer, reason, sources[{document, document_version, location, passage, quote, highlight, coverage}], related, closest, took_ms}`
+- Login by session cookie (browser) or HTTP Basic (scripts).
 
 ### UI
 - Documents page: upload, list, live status per document.
@@ -95,12 +110,16 @@ question and get an answer they can verify against the source.
 
 ## Evaluation
 - `eval/golden.yaml`: questions with expected document and location, or expected refusal.
-- Metrics: hit@1, hit@3, refusal precision and recall, quote validity, p95 latency.
-- The support threshold is set from these results and the results are reported in the note.
+- Each question is in a `dev` split (used for tuning) or a `test` split (kept apart).
+- Outcomes: correct, wrong passage, false refusal, declined, false answer. Latency is
+  measured through the API.
+- The support threshold is set from the dev results. Release gates in the harness fail
+  CI if confident mistakes appear on dev or accuracy drops below 80%.
 
 ## Azure (defined, not deployed)
-Terraform: Container Apps (api, worker), PostgreSQL Flexible Server, Blob Storage,
-Key Vault, managed identity, Log Analytics. Azure OpenAI behind `enable_ai = false`.
+Terraform: Container Apps (api, worker), PostgreSQL Flexible Server, Container
+Registry, Key Vault, managed identity, Log Analytics. Azure OpenAI behind
+`enable_ai = false`. Reasoning in `infra/README.md`.
 
 ## Out of scope
 Per-document permissions, multi-tenancy, accounts beyond a basic login, conversation

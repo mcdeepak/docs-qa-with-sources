@@ -102,7 +102,7 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
                 </td>
                 <td><Status doc={d} /></td>
                 <td>{d.status === "ready" ? d.chunk_count : "–"}</td>
-                <td className="small">{when(d.uploaded_at)}<div className="muted">upload {d.version_no}</div></td>
+                <td className="small when">{when(d.uploaded_at)}<div className="muted">upload {d.version_no}</div></td>
                 <td>
                   <button className="link danger" onClick={() => {
                     if (window.confirm(`Remove ${d.filename}? It will no longer be searchable.`)) api.remove(d.id);
