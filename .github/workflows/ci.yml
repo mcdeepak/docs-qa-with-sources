@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the system
+        run: docker compose up --build -d
+
+      - name: Tests (unit and integration, against Postgres)
+        run: docker compose run --rm api pytest -q
+
+      # Fails the build if a release gate in eval/run_eval.py is missed.
+      - name: Evaluation gates (offline, no model)
+        run: docker compose run --rm api python eval/run_eval.py --verbose
+
+      - name: Evaluation through the API (latency with 20 documents)
+        run: docker compose run --rm api python eval/run_eval.py --api http://api:8000
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 200
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check
+        working-directory: infra
+      - run: terraform init -backend=false -input=false
+        working-directory: infra
+      - run: terraform validate
+        working-directory: infra
