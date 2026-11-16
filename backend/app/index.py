@@ -10,7 +10,8 @@ from collections import Counter
 from dataclasses import dataclass
 
 from . import db
-from .text import QueryTerm, analyse, SOFT_WEIGHT
+from .config import settings
+from .text import FRAME_WEIGHT, QueryTerm, analyse, has_quantity
 
 HEADING_WEIGHT = 0.5   # a term in the section heading counts as half a body term
 TITLE_WEIGHT = 0.25    # a term in the document title counts for a quarter
@@ -36,11 +37,14 @@ class Chunk:
 
 
 class CorpusIndex:
-    def __init__(self, chunks: list[Chunk], generation: int = 0):
+    def __init__(self, chunks: list[Chunk], generation: int = 0, absent_term_weight: float | None = None):
         self.generation = generation
+        self.absent_term_weight = (settings.absent_term_weight if absent_term_weight is None
+                                   else absent_term_weight)
         self.chunks = chunks
         # Weighted term frequencies per chunk: body + heading + title.
         self.tf: list[dict[str, float]] = []
+        self.quantity: list[bool] = [has_quantity(c.text) for c in chunks]
         self.length: list[float] = []
         df: Counter = Counter()
         for c in chunks:
@@ -69,20 +73,26 @@ class CorpusIndex:
         """How much a question term matters. Rare terms matter more; a term that
         appears nowhere in the documents matters most. A term reached through a
         synonym is weighed by the commonest wording that is actually present."""
+        if term.frame:
+            return self.max_idf * FRAME_WEIGHT
         present = [self.idf(s) for s in term.matches if self.df.get(s, 0) > 0]
-        weight = min(present) if present else self.max_idf
-        return weight * (SOFT_WEIGHT if term.soft else 1.0)
+        return min(present) if present else self.max_idf * self.absent_term_weight
+
+    def covers(self, term: QueryTerm, chunk_pos: int) -> bool:
+        if term.frame and self.quantity[chunk_pos]:
+            return True
+        tf = self.tf[chunk_pos]
+        return any(s in tf for s in term.matches)
 
     def coverage(self, terms: list[QueryTerm], chunk_pos: int) -> tuple[float, list[str], list[str]]:
         """Share of the question, weighted by term importance, found in a passage.
         Returns (coverage, matched terms, missing terms)."""
-        tf = self.tf[chunk_pos]
         total = got = 0.0
         matched, missing = [], []
         for t in terms:
             w = self.term_weight(t)
             total += w
-            if any(s in tf for s in t.matches):
+            if self.covers(t, chunk_pos):
                 got += w
                 matched.append(t.stem)
             else:

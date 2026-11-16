@@ -21,8 +21,11 @@ class Settings:
     answerer: str = _get("ANSWERER", "extractive")
 
     # Support decision. Set from eval results, see eval/README.md.
-    support_threshold: float = float(_get("SUPPORT_THRESHOLD", "0.6"))
-    top_k: int = int(_get("TOP_K", "5"))
+    support_threshold: float = float(_get("SUPPORT_THRESHOLD", "0.55"))
+    # A question word found in no document at all counts this many times the weight
+    # of the rarest word. Higher means stricter refusals.
+    absent_term_weight: float = float(_get("ABSENT_TERM_WEIGHT", "2.0"))
+    top_k: int = int(_get("TOP_K", "8"))
     use_synonyms: bool = _get("USE_SYNONYMS", "true").lower() == "true"
 
     max_upload_mb: int = int(_get("MAX_UPLOAD_MB", "20"))
