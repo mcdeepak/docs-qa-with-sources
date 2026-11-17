@@ -53,7 +53,9 @@ its job commit together.
 - The worker claims one job with `FOR UPDATE SKIP LOCKED` and sets a lease it renews
   while working.
 - A job whose lease has expired is claimed again. Indexing a version is idempotent:
-  its chunks are deleted and rewritten in one transaction.
+  its chunks are deleted and rewritten in one transaction. A job that runs again after
+  it already finished does nothing, and only versions older than the one being indexed
+  are ever retired.
 - After 3 failed attempts the version is marked `failed` with the error shown in the UI.
 - Stages reported: `queued`, `extracting`, `chunking`, `indexing`, `ready`, `failed`.
 
@@ -64,14 +66,15 @@ its job commit together.
 - Each chunk records page (PDF), heading path and clause number. This is the "location".
 
 ### Retrieval (swappable)
-- Interface: `Retriever.search(question, k) -> list[ScoredChunk]`.
+- Interface: `Retriever.search(index, question, k) -> list[Hit]`.
 - Default `bm25`: BM25 over active chunks, with lowercasing, stop-word removal, stemming
   and a small configurable synonym table. Heading text is indexed at lower weight.
 - Selected with `RETRIEVER`.
 
 ### Answering (swappable)
-- Interface: `Answerer.answer(question, chunks) -> Draft(text, quotes)`.
-- Default `extractive`: the best-matching sentence or table row from the top chunk, verbatim.
+- Interface: `Answerer.answer(question, hits) -> Draft(text, quotes)`.
+- Default `extractive`: the top passage verbatim, or its best-matching sentence when the
+  passage is longer than 300 characters.
 - Optional `llm`: any OpenAI-compatible endpoint. Must return quotes. Off by default.
 - Selected with `ANSWERER`.
 
@@ -79,12 +82,24 @@ its job commit together.
 1. Coverage gate: the rarity-weighted share of the question's words found in a passage
    must reach `SUPPORT_THRESHOLD` (0.55).
    - A word found in no document counts `ABSENT_TERM_WEIGHT` (2.0) times the rarest word.
+   - A word in the passage text counts in full, in its section heading only half, in
+     the document title only a quarter. The exception is a document's owner/version
+     line, where the title's words count in full when the question asks for something
+     that line states.
    - A quantity word after "how" (long, often, many) is satisfied by a passage that
      contains a number or a frequency word.
+   - In "who <verb>..." and "how do I <verb>..." questions, the first content word after
+     the opener is required: a passage without it (in text or heading) is rejected.
+   - For two content words that are adjacent in the question, a passage that has the
+     first but not the second gets half credit for the first.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
-   passage it cites, and that passage must have passed the coverage gate. Quotes that
-   fail are dropped. No quotes left means not supported.
+   passage it cites, be at least 20 characters or the whole passage, and that passage
+   must have passed the coverage gate. Quotes that fail are dropped. No quotes left
+   means not supported.
+3. Wording gate: if the answer text contains a number that is not in its quotes, or
+   fewer than 60% of its content words come from the quotes or the question, the first
+   quote is shown as the answer instead.
 
 When the answer is not supported, the closest passages are returned separately and
 labelled as insufficient.
