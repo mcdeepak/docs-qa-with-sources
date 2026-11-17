@@ -145,3 +145,27 @@ def test_the_index_is_only_rebuilt_when_documents_change(database):
     documents.upload("device-and-laptop-policy.md", DEVICE)
     drain()
     assert index.current() is not first
+
+
+def test_a_finished_job_that_runs_again_cannot_undo_a_newer_upload(database):
+    """Regression: a job re-run after its lease lapsed used to retire the newer version."""
+    documents.upload("device-and-laptop-policy.md", DEVICE)
+    first = worker.claim()
+    worker.run_job(first)                                   # version 1 is ready
+
+    changed = DEVICE.replace(b"every 4 years", b"every 3 years")
+    documents.upload("device-and-laptop-policy.md", changed)   # version 2 is queued
+
+    # The first job comes back as if its lease had lapsed before it was marked done.
+    with database.pool().connection() as conn:
+        conn.execute("UPDATE jobs SET state = 'running', leased_until = now() - interval '1 second' "
+                     "WHERE id = %s", (first["id"],))
+    rerun = worker.claim()
+    assert rerun["id"] == first["id"]
+    worker.run_job(rerun)
+
+    assert status_of("device-and-laptop-policy.md")["status"] == "queued"   # version 2 untouched
+    drain()
+    doc = status_of("device-and-laptop-policy.md")
+    assert doc["status"] == "ready" and doc["version_no"] == 2
+    assert "every 3 years" in qa.ask("How often are laptops refreshed?")["answer"]

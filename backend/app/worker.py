@@ -40,7 +40,8 @@ RETURNING id, version_id, attempts
 
 
 class Superseded(Exception):
-    """A newer upload of the same document arrived; this job's result is not needed."""
+    """This job's result is not needed: a newer upload of the same document arrived,
+    or an earlier run of the same job already finished."""
 
 
 def claim() -> dict | None:
@@ -75,10 +76,13 @@ def _set_stage(version_id: int, stage: str) -> None:
 def index_version(version_id: int) -> None:
     with db.pool().connection() as conn:
         row = conn.execute(
-            "SELECT v.content, v.status, d.filename, d.id AS document_id "
+            "SELECT v.content, v.status, v.version_no, d.filename, d.id AS document_id "
             "FROM document_versions v JOIN documents d ON d.id = v.document_id "
             "WHERE v.id = %s", (version_id,)).fetchone()
-    if row is None or row["status"] == "superseded" or row["content"] is None:
+    # "ready" here means an earlier run of this same job already finished (its lease
+    # lapsed, or the worker died after committing). Doing the work again could undo a
+    # newer upload, so we stop.
+    if row is None or row["status"] in ("superseded", "ready") or row["content"] is None:
         raise Superseded()
 
     _set_stage(version_id, "extracting")
@@ -90,8 +94,14 @@ def index_version(version_id: int) -> None:
 
     _set_stage(version_id, "indexing")
     with db.pool().connection() as conn:   # one transaction: all or nothing
+        # Lock the document so an upload and this switch cannot interleave, then make
+        # sure this is still the newest upload and has not been finished already.
+        conn.execute("SELECT 1 FROM documents WHERE id = %s FOR UPDATE", (row["document_id"],))
         still_wanted = conn.execute(
-            "SELECT 1 FROM document_versions WHERE id = %s AND status <> 'superseded' FOR UPDATE",
+            "SELECT 1 FROM document_versions v WHERE v.id = %s "
+            "AND v.status NOT IN ('superseded', 'ready') "
+            "AND v.version_no = (SELECT max(version_no) FROM document_versions "
+            "                    WHERE document_id = v.document_id)",
             (version_id,)).fetchone()
         if not still_wanted:
             raise Superseded()
@@ -107,13 +117,14 @@ def index_version(version_id: int) -> None:
         # Switch the document to this version and drop what the old versions left behind.
         conn.execute("UPDATE documents SET active_version_id = %s WHERE id = %s",
                      (version_id, row["document_id"]))
+        # Only older versions are retired. A newer one can never be touched from here.
         conn.execute(
             "DELETE FROM chunks WHERE version_id IN (SELECT id FROM document_versions "
-            "WHERE document_id = %s AND id <> %s)", (row["document_id"], version_id))
+            "WHERE document_id = %s AND version_no < %s)", (row["document_id"], row["version_no"]))
         conn.execute(
             "UPDATE document_versions SET status = 'superseded', content = NULL "
-            "WHERE document_id = %s AND id <> %s AND status <> 'failed'",
-            (row["document_id"], version_id))
+            "WHERE document_id = %s AND version_no < %s AND status <> 'failed'",
+            (row["document_id"], row["version_no"]))
         db.bump_generation(conn)
 
 
@@ -179,7 +190,13 @@ def main() -> None:
         if job is None:
             time.sleep(settings.poll_seconds)
             continue
-        run_job(job)
+        try:
+            run_job(job)
+        except Exception:
+            # For example the database dropped mid-job. The lease will run out and the
+            # job will be claimed again; the worker itself keeps going.
+            log.exception("job %s could not be completed", job["id"])
+            time.sleep(2)
 
 
 if __name__ == "__main__":

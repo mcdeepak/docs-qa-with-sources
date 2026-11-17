@@ -56,6 +56,9 @@ ALIASES = {"wi-fi": "wifi", "wi fi": "wifi", "e-mail": "email", "sign-in": "sign
            "sign in": "signin", "log-in": "login", "log in": "login"}
 
 
+_ALIAS = re.compile(r"\b(?:" + "|".join(re.escape(a) for a in ALIASES) + r")\b")
+
+
 def has_quantity(text: str) -> bool:
     return bool(_QUANTITY.search(text))
 
@@ -70,8 +73,7 @@ def words(text: str) -> list[str]:
     text = text.lower().replace("’", "'")
     text = re.sub(r"'s\b", "", text)
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)   # 10,000 -> 10000
-    for spelling, word in ALIASES.items():
-        text = text.replace(spelling, word)
+    text = _ALIAS.sub(lambda m: ALIASES[m.group(0)], text)
     return [IRREGULAR.get(w, w) for w in _WORD.findall(text)]
 
 

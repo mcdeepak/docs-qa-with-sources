@@ -9,7 +9,6 @@ EXTRACTORS at the bottom of this file.
 """
 import io
 import re
-import statistics
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -40,17 +39,28 @@ class Extracted:
     passages: list[Passage] = field(default_factory=list)
 
 
-_CLAUSE = re.compile(r"^(\d+(?:\.\d+)+)[.)]?\s+(?=\S)")
-_BULLET = re.compile(r"^\s*(?:[-*+•▪–]|\d+[.)])\s+")
+# A clause number is "2.1" followed by a capitalised word. Requiring the capital keeps
+# "1.5 times the hourly rate" and "10.0.0.1 is the gateway" as ordinary text.
+_CLAUSE = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,3})[.)]?\s+(?=[A-Z\"'(\[])")
+_BULLET = re.compile(r"^\s*(?:[-*+\u2022\u25aa\u2013]|\d{1,2}[.)])\s+")
 _VERSION = re.compile(r"\bversion\b[\s:*_]*v?(\d+(?:\.\d+)*)", re.I)
-_OWNER = re.compile(r"\bowner\b[\s:*_]*([^|\n*]+)", re.I)
+_OWNER = re.compile(r"\bowner\b[\s*_]*:[\s*_]*([^|\n*]+)", re.I)
+# A metadata line is short and either uses "|" separators or starts with the label.
+_META_LINE = re.compile(r"^[\s*_>#-]*(version|owner)\b", re.I)
 
 
 def _metadata(header_text: str) -> tuple[str | None, str | None]:
-    version = _VERSION.search(header_text)
-    owner = _OWNER.search(header_text)
-    return (version.group(1) if version else None,
-            owner.group(1).strip() if owner else None)
+    """Document version and owner, read only from lines that look like a header
+    ("Owner: IT | Version: 2.0"), never from ordinary sentences."""
+    version = owner = None
+    for line in header_text.splitlines():
+        if len(line) > 160 or not ("|" in line or _META_LINE.match(line)):
+            continue
+        if version is None and (m := _VERSION.search(line)):
+            version = m.group(1)
+        if owner is None and (m := _OWNER.search(line)):
+            owner = m.group(1).strip() or None
+    return version, owner
 
 
 def _split_long(passage: Passage) -> list[Passage]:
@@ -73,6 +83,10 @@ def _split_long(passage: Passage) -> list[Passage]:
 
 
 def _finish(title: str, header_text: str, passages: list[Passage]) -> Extracted:
+    for p in passages:
+        p.text = p.text.replace("\x00", "")       # Postgres text cannot hold NUL
+        p.heading = p.heading.replace("\x00", "")
+    title = title.replace("\x00", "")
     passages = [q for p in passages if p.text.strip() for q in _split_long(p)]
     if not passages:
         raise UnsupportedDocument("No readable text was found in this file.")
@@ -98,11 +112,28 @@ def _cells(row: str) -> list[str]:
     return [_clean_inline(c) for c in row.strip().strip("|").split("|")]
 
 
-def extract_markdown(data: bytes, filename: str) -> Extracted:
+_MD_RULE = re.compile(r"^\s*([-*_])\s*(?:\1\s*){2,}$")          # --- *** ___
+_MD_SETEXT = re.compile(r"^\s*(=+|-+)\s*$")
+
+
+def _decode(data: bytes) -> str:
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):          # UTF-16, e.g. Notepad "Unicode"
+        return data.decode("utf-16")
     try:
-        lines = data.decode("utf-8-sig").splitlines()
+        return data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        lines = data.decode("latin-1").splitlines()
+        return data.decode("latin-1")
+
+
+def extract_markdown(data: bytes, filename: str) -> Extracted:
+    lines = _decode(data).splitlines()
+    # YAML front matter between two "---" lines at the very top is not content.
+    if lines and lines[0].strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end is not None:
+            lines[: end + 1] = [""] * (end + 1)
+    # Block quotes are read as ordinary text.
+    lines = [re.sub(r"^\s*>+\s?", "", line) for line in lines]
 
     title = ""
     stack: list[tuple[int, str]] = []   # (level, heading text) below the title
@@ -134,9 +165,21 @@ def extract_markdown(data: bytes, filename: str) -> Extracted:
             i += 1
             continue
 
+        if _MD_RULE.match(line):
+            i += 1
+            continue
+
         m = _MD_HEADING.match(line)
-        if m:
-            level, text = len(m.group(1)), _clean_inline(m.group(2))
+        # Setext heading: a text line underlined with === or ---.
+        setext = bool(not m and i + 1 < len(lines) and _MD_SETEXT.match(lines[i + 1])
+                      and not _BULLET.match(line) and "|" not in line)
+        if m or setext:
+            if setext:
+                level = 1 if lines[i + 1].strip().startswith("=") else 2
+                text = _clean_inline(line)
+                i += 1
+            else:
+                level, text = len(m.group(1)), _clean_inline(m.group(2))
             if level == 1 and not title:
                 title = text
             else:
@@ -171,6 +214,8 @@ def extract_markdown(data: bytes, filename: str) -> Extracted:
         start, buf = i, []
         while (i < len(lines) and lines[i].strip() and not _MD_HEADING.match(lines[i])
                and not _BULLET.match(lines[i]) and not lines[i].strip().startswith("```")
+               and not _MD_RULE.match(lines[i])
+               and not (buf and i + 1 < len(lines) and _MD_SETEXT.match(lines[i + 1]))
                and not (buf and "|" in lines[i] and i + 1 < len(lines)
                         and _MD_TABLE_SEP.match(lines[i + 1]))):
             buf.append(lines[i].strip())
@@ -245,7 +290,8 @@ def _join(a: str, b: str) -> str:
 def extract_pdf(data: bytes, filename: str) -> Extracted:
     try:
         reader = PdfReader(io.BytesIO(data))
-        if reader.is_encrypted:
+        # Many PDFs are encrypted only to restrict printing and open with an empty password.
+        if reader.is_encrypted and not reader.decrypt(""):
             raise UnsupportedDocument("This PDF is password protected.")
         lines = [l for l in _pdf_lines(reader) if l.text]
     except UnsupportedDocument:
@@ -261,12 +307,35 @@ def extract_pdf(data: bytes, filename: str) -> Extracted:
         sizes[l.size] += len(l.text)
     body_size = sizes.most_common(1)[0][0]
     gaps = [a.y - b.y for a, b in zip(lines, lines[1:]) if a.page == b.page and 0 < a.y - b.y < 40]
-    line_gap = statistics.median(gaps) if gaps else body_size * 1.2
+    # Normal line spacing: the tightest spacing that occurs regularly, capped at 1.3 times
+    # the font size so a document of one-line paragraphs is not read as a single block.
+    real_gaps = sorted(g for g in gaps if g >= body_size * 0.8)
+    tight = real_gaps[len(real_gaps) // 10] if real_gaps else body_size * 1.2
+    line_gap = min(tight, body_size * 1.3)
 
-    # Lines repeated on most pages are running headers or footers.
+    # A running header or footer is a line at the top or bottom edge of a page that
+    # repeats (ignoring digits such as the page number) on most pages. Body lines are
+    # never dropped, however often their shape repeats.
     pages = len(reader.pages)
-    repeats = Counter(re.sub(r"\d+", "#", l.text) for l in lines)
-    boiler = {t for t, n in repeats.items() if pages >= 3 and n >= max(3, int(pages * 0.6))}
+    by_page: dict[int, list[_Line]] = {}
+    for l in lines:
+        by_page.setdefault(l.page, []).append(l)
+    edge_ids = {id(l) for page_lines in by_page.values() for l in page_lines[:2] + page_lines[-2:]}
+
+    def shape(l: _Line) -> str:
+        return re.sub(r"\d+", "#", l.text)
+
+    on_pages: dict[str, set[int]] = {}
+    for l in lines:
+        if id(l) in edge_ids:
+            on_pages.setdefault(shape(l), set()).add(l.page)
+    boiler = {t for t, ps in on_pages.items() if pages >= 3 and len(ps) >= max(3, int(pages * 0.6))}
+    page_number = re.compile(r"(page\s*)?\d+(\s*(of|/)\s*\d+)?", re.I)
+
+    def is_boilerplate(l: _Line) -> bool:
+        if id(l) not in edge_ids:
+            return False
+        return shape(l) in boiler or (pages >= 2 and bool(page_number.fullmatch(l.text)))
 
     def is_heading(l: _Line) -> bool:
         if len(l.text) > 120:
@@ -291,7 +360,7 @@ def extract_pdf(data: bytes, filename: str) -> Extracted:
         current = None
 
     for l in lines:
-        if re.sub(r"\d+", "#", l.text) in boiler or re.fullmatch(r"(page\s*)?\d+(\s*(of|/)\s*\d+)?", l.text, re.I):
+        if is_boilerplate(l):
             continue
         if l is title_line and title:
             prev = l

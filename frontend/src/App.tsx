@@ -17,6 +17,13 @@ export function App() {
     api.me().then(setMe).catch(() => setMe(null)).finally(() => setChecking(false));
   useEffect(() => { loadMe(); }, []);
 
+  // Any API call that finds the session gone sends us back to the sign-in page.
+  useEffect(() => {
+    const expired = () => setMe(null);
+    window.addEventListener("session-expired", expired);
+    return () => window.removeEventListener("session-expired", expired);
+  }, []);
+
   // One live connection for the whole app: the server pushes the document list
   // whenever a status changes. The browser reconnects by itself if it drops.
   useEffect(() => {

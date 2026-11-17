@@ -37,7 +37,11 @@ def _valid_token(token: str) -> bool:
     except ValueError:
         return False
     payload = f"{username}|{expires}"
-    return hmac.compare_digest(signature, _sign(payload)) and int(expires) > time.time()
+    try:
+        return (hmac.compare_digest(signature.encode(), _sign(payload).encode())
+                and int(expires) > time.time())
+    except (ValueError, UnicodeError):
+        return False
 
 
 def require_login(request: Request) -> None:

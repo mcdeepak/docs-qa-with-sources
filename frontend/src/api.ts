@@ -70,10 +70,15 @@ export class Unauthorised extends Error {}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: "same-origin", ...init });
-  if (response.status === 401) throw new Unauthorised();
+  if (response.status === 401) {
+    // Tell the app shell so it can return to the sign-in page.
+    if (path !== "/api/me" && path !== "/api/login") window.dispatchEvent(new Event("session-expired"));
+    throw new Unauthorised("Your session has ended. Please sign in again.");
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Request failed (${response.status})`);
+    const detail = typeof body.detail === "string" ? body.detail : null;
+    throw new Error(detail ?? `Request failed (${response.status})`);
   }
   return response.json();
 }
