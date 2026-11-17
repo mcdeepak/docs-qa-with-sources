@@ -88,3 +88,37 @@
 - {split: test, q: "What is the overtime pay rate?", answerable: false}
 - {split: test, q: "Can I expense a gym membership?", answerable: false}
 - {split: test, q: "How long is the probation period?", answerable: false}
+
+# ---------------------------------------------------------------- fresh
+# Written after an independent review, before the fixes that followed it, so the
+# effect of those fixes could be measured on questions they were not tuned on.
+
+# fresh: answerable
+- {split: fresh, q: "Who has to approve leave longer than 10 working days?", file: annual-leave-policy.md, contains: "department head"}
+- {split: fresh, q: "When do carried-over leave days expire?", file: annual-leave-policy.md, contains: "31 March"}
+- {split: fresh, q: "How much can I spend on a taxi?", file: expense-and-travel-policy.md, contains: "60 dollars"}
+- {split: fresh, q: "Is alcohol reimbursed?", file: expense-and-travel-policy.md, contains: "Alcohol is not reimbursed"}
+- {split: fresh, q: "Can I share my password with a colleague?", file: acceptable-use-policy.md, contains: "Sharing an account or password"}
+- {split: fresh, q: "How soon are new starter accounts created?", file: access-control-policy.md, contains: "3 business days"}
+- {split: fresh, q: "What must a change request include?", file: change-management-procedure.md, contains: "rollback plan"}
+- {split: fresh, q: "Where are backup copies stored?", file: backup-and-recovery-standard.md, contains: "second region"}
+- {split: fresh, q: "How long are chat messages retained?", file: email-and-messaging-policy.md, contains: "2 years"}
+- {split: fresh, q: "Who reviews contracts longer than 12 months?", file: vendor-and-procurement-policy.md, contains: "reviewed by Legal"}
+- {split: fresh, q: "How are staff notified when the continuity plan is activated?", file: business-continuity-plan.pdf, contains: "emergency text message"}
+- {split: fresh, q: "Do visitors have to wear a badge?", file: visitor-and-office-access-policy.md, contains: "visitor badge"}
+- {split: fresh, q: "How often is a licence audit carried out?", file: software-and-licensing-policy.md, contains: "every 6 months"}
+- {split: fresh, q: "What happens to unused licences?", file: software-and-licensing-policy.md, contains: "reclaimed after 90 days"}
+
+# fresh: unanswerable, most of them near misses
+- {split: fresh, q: "Who approved the data retention policy?", answerable: false}
+- {split: fresh, q: "Who wrote the incident response procedure?", answerable: false}
+- {split: fresh, q: "Who is the IT manager?", answerable: false}
+- {split: fresh, q: "How do I request a new access card?", answerable: false}
+- {split: fresh, q: "How long is the notice period for cancelling a hotel booking?", answerable: false}
+- {split: fresh, q: "What is the retention period for CCTV footage?", answerable: false}
+- {split: fresh, q: "How many days of bereavement leave are there?", answerable: false}
+- {split: fresh, q: "How do I submit a timesheet?", answerable: false}
+- {split: fresh, q: "What is the budget for team lunches?", answerable: false}
+- {split: fresh, q: "How often is the fire alarm tested?", answerable: false}
+- {split: fresh, q: "Who approves overtime?", answerable: false}
+- {split: fresh, q: "When is the office Christmas party?", answerable: false}
