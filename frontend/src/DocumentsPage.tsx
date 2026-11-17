@@ -1,11 +1,17 @@
 import { DragEvent, useRef, useState } from "react";
 import { api, Doc, Me, UploadResult } from "./api";
-import { FileIcon, UploadIcon } from "./icons";
+import { UploadIcon } from "./icons";
 
 const STAGES = ["queued", "extracting", "chunking", "indexing", "ready"];
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+// A small tile showing the file type, taken from the file name's extension.
+function TypeTile({ filename }: { filename: string }) {
+  const pdf = filename.toLowerCase().endsWith(".pdf");
+  return <span className={pdf ? "type pdf" : "type md"}>{pdf ? "PDF" : "MD"}</span>;
+}
 
 function Status({ doc }: { doc: Doc }) {
   if (doc.status === "failed") {
@@ -99,21 +105,23 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
       ) : (
         <div className="table-wrap"><table>
           <thead>
-            <tr><th>Document</th><th>Status</th><th>Passages</th><th>Uploaded</th><th /></tr>
+            <tr><th>Document</th><th>Version</th><th>Status</th><th className="num">Passages</th><th>Uploaded</th><th /></tr>
           </thead>
           <tbody>
             {docs.map((d) => (
               <tr key={d.id}>
                 <td>
                   <div className="doc-name">
-                    <FileIcon />
+                    <TypeTile filename={d.filename} />
                     <div>
                       <strong>{d.title ?? d.filename}</strong>
-                      {d.doc_version && <span className="pill">version {d.doc_version}</span>}
-                      <div className="muted small">{d.filename}{d.doc_owner && <> · owner: {d.doc_owner}</>}</div>
+                      <div className="muted small">
+                        {d.doc_owner && <>{d.doc_owner} · </>}<span className="mono">{d.filename}</span>
+                      </div>
                     </div>
                   </div>
                 </td>
+                <td>{d.doc_version ? <span className="ver-tag">v{d.doc_version}</span> : <span className="muted">–</span>}</td>
                 <td><Status doc={d} /></td>
                 <td className="num">{d.status === "ready" ? d.chunk_count : "–"}</td>
                 <td className="small when">{when(d.uploaded_at)}<div className="muted">upload {d.version_no}</div></td>
