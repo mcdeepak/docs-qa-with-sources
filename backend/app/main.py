@@ -74,9 +74,11 @@ def me():
 async def upload_documents(files: list[UploadFile] = File(...)):
     """Upload one or more files. Returns at once; indexing happens in the worker."""
     results = []
+    limit = settings.max_upload_mb * 1024 * 1024
     for f in files:
-        data = await f.read()
-        if len(data) > settings.max_upload_mb * 1024 * 1024:
+        # Read at most one byte past the limit, so an oversized file is never held whole.
+        data = await f.read(limit + 1)
+        if len(data) > limit:
             results.append({"outcome": "rejected", "filename": f.filename,
                             "message": f"Larger than {settings.max_upload_mb} MB."})
             continue

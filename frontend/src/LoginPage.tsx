@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { api } from "./api";
+import { api, Unauthorised } from "./api";
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState("");
@@ -13,7 +13,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
       await api.login(username, password);
       onLogin();
     } catch (e) {
-      setError(e instanceof Error && e.message !== "" ? e.message : "Wrong username or password.");
+      setError(e instanceof Unauthorised ? "Wrong username or password." : "Could not sign in. Is the server running?");
     }
   };
 

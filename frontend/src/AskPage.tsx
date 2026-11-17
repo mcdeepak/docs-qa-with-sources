@@ -64,6 +64,7 @@ export function AskPage({ readyCount, goToDocuments }: { readyCount: number; goT
     if (!question.trim() || loading) return;
     setLoading(true);
     setError("");
+    setAnswer(null);   // never leave an old answer under a new question
     try {
       setAnswer(await api.ask(question));
     } catch (e) {

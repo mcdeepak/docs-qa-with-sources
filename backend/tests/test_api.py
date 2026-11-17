@@ -36,3 +36,15 @@ def test_upload_then_ask_over_http(database):
 
         declined = client.post("/api/ask", json={"question": "What is the parental leave policy?"}, auth=AUTH).json()
         assert declined["supported"] is False and declined["sources"] == []
+
+
+def test_a_malformed_session_cookie_is_a_401_not_a_server_error(database):
+    with TestClient(app) as client:
+        client.cookies.set("session", "admin|9999999999|not-a-real-signature")
+        assert client.get("/api/documents").status_code == 401
+
+
+def test_a_session_cookie_with_odd_characters_is_simply_invalid():
+    from app import auth
+    assert auth._valid_token("caf\u00e9|9999999999|sig") is False
+    assert auth._valid_token("admin|not-a-number|sig") is False

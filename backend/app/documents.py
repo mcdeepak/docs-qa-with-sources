@@ -57,7 +57,8 @@ def upload(filename: str, data: bytes) -> dict:
         # Serialise uploads so two identical uploads at once cannot both get through.
         conn.execute("SELECT pg_advisory_xact_lock(727275)")
 
-        doc = conn.execute("SELECT id FROM documents WHERE filename = %s", (filename,)).fetchone()
+        doc = conn.execute("SELECT id FROM documents WHERE filename = %s FOR UPDATE",
+                           (filename,)).fetchone()
         latest = None
         if doc:
             latest = conn.execute(

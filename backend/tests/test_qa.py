@@ -122,3 +122,9 @@ def test_llm_failure_falls_back_to_the_extractive_answer(sample_index):
     assert result["supported"] is True
     assert result["answer"] == "Passwords must be at least 14 characters long."
     assert "llm unavailable" in result["answerer"]
+
+
+def test_aliases_only_match_whole_words():
+    from app.text import words
+    assert words("Design in the open") == ["design", "in", "the", "open"]
+    assert words("Use Wi-Fi to sign in") == ["use", "wifi", "to", "signin"]
