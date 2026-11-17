@@ -11,10 +11,21 @@ from dataclasses import dataclass
 
 from . import db
 from .config import settings
-from .text import FRAME_WEIGHT, QueryTerm, analyse, has_quantity
+from .text import FRAME_WEIGHT, QueryTerm, analyse, has_quantity, words
 
 HEADING_WEIGHT = 0.5   # a term in the section heading counts as half a body term
 TITLE_WEIGHT = 0.25    # a term in the document title counts for a quarter
+# When a question says "probation period" and a passage has "probation" but not
+# "period", the passage is about something else. The half that matched counts this much.
+BROKEN_PHRASE_CREDIT = 0.5
+
+
+@dataclass
+class Coverage:
+    value: float                 # 0 to 1: weighted share of the question found in the passage
+    matched: list[str]
+    missing: list[str]
+    required_missing: list[str]  # words the question turns on that the passage lacks
 
 
 @dataclass(frozen=True)
@@ -44,6 +55,13 @@ class CorpusIndex:
         self.chunks = chunks
         # Weighted term frequencies per chunk: body + heading + title.
         self.tf: list[dict[str, float]] = []
+        # Where each term occurs, so a match in the passage itself can count for more
+        # than a match in its section heading or document title.
+        self.body: list[frozenset[str]] = []
+        self.heading: list[frozenset[str]] = []
+        self.title: list[frozenset[str]] = []
+        # Exact words of the title, used only for a document's owner/version line.
+        self.title_words: list[frozenset[str]] = []
         self.quantity: list[bool] = [has_quantity(c.text) for c in chunks]
         self.length: list[float] = []
         df: Counter = Counter()
@@ -56,6 +74,10 @@ class CorpusIndex:
             for term in analyse(c.title):
                 tf[term] = tf.get(term, 0.0) + TITLE_WEIGHT
             self.tf.append(tf)
+            self.body.append(frozenset(analyse(c.text)))
+            self.heading.append(frozenset(analyse(c.heading)))
+            self.title.append(frozenset(analyse(c.title)))
+            self.title_words.append(frozenset(words(c.title)) if c.kind == "metadata" else frozenset())
             self.length.append(sum(tf.values()))
             df.update(tf.keys())
         self.df = df
@@ -79,25 +101,45 @@ class CorpusIndex:
         return min(present) if present else self.max_idf * self.absent_term_weight
 
     def covers(self, term: QueryTerm, chunk_pos: int) -> bool:
-        if term.frame and self.quantity[chunk_pos]:
-            return True
-        tf = self.tf[chunk_pos]
-        return any(s in tf for s in term.matches)
+        return self.credit(term, chunk_pos) > 0
 
-    def coverage(self, terms: list[QueryTerm], chunk_pos: int) -> tuple[float, list[str], list[str]]:
-        """Share of the question, weighted by term importance, found in a passage.
-        Returns (coverage, matched terms, missing terms)."""
+    def credit(self, term: QueryTerm, chunk_pos: int) -> float:
+        """How well a passage matches one question term: 1 in the passage text, 0.5 in
+        its section heading only, 0.25 in the document title only, else 0."""
+        if term.frame and self.quantity[chunk_pos]:
+            return 1.0
+        if term.matches & self.body[chunk_pos]:
+            return 1.0
+        if term.matches & self.heading[chunk_pos]:
+            return HEADING_WEIGHT
+        if term.matches & self.title[chunk_pos]:
+            return TITLE_WEIGHT
+        return 0.0
+
+    def coverage(self, terms: list[QueryTerm], chunk_pos: int) -> Coverage:
+        """Share of the question, weighted by term importance, found in a passage."""
+        credits = [self.credit(t, chunk_pos) for t in terms]
+        # A document's owner/version line is about the document named in its title. When
+        # the question asks for something that line states ("who owns the device
+        # policy?"), the title's exact words count in full.
+        title_words = self.title_words[chunk_pos]
+        if title_words and any(not t.frame and t.matches & self.body[chunk_pos] for t in terms):
+            credits = [1.0 if t.word.lower() in title_words else c for t, c in zip(terms, credits)]
+        for i, t in enumerate(terms[:-1]):
+            # The partner counts as missing when it is only in the document title.
+            if t.joined_to_next and credits[i] > 0 and credits[i + 1] < HEADING_WEIGHT:
+                credits[i] *= BROKEN_PHRASE_CREDIT
         total = got = 0.0
-        matched, missing = [], []
-        for t in terms:
+        matched, missing, required_missing = [], [], []
+        for t, c in zip(terms, credits):
             w = self.term_weight(t)
             total += w
-            if self.covers(t, chunk_pos):
-                got += w
-                matched.append(t.word or t.stem)
-            else:
-                missing.append(t.word or t.stem)
-        return (got / total if total else 0.0), matched, missing
+            got += w * c
+            (matched if c > 0 else missing).append(t.word or t.stem)
+            # A required word must be in the passage or its heading; the title is not enough.
+            if t.required and c < HEADING_WEIGHT:
+                required_missing.append(t.word or t.stem)
+        return Coverage(got / total if total else 0.0, matched, missing, required_missing)
 
 
 _lock = threading.Lock()

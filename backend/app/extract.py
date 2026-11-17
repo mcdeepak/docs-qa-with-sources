@@ -23,7 +23,7 @@ class UnsupportedDocument(Exception):
 
 @dataclass
 class Passage:
-    kind: str                 # paragraph | bullet | clause | table_row
+    kind: str                 # paragraph | bullet | clause | table_row | metadata
     text: str
     heading: str = ""         # section path, e.g. "3. Lost or stolen devices"
     page: int | None = None   # PDF only
@@ -87,6 +87,11 @@ def _finish(title: str, header_text: str, passages: list[Passage]) -> Extracted:
         p.text = p.text.replace("\x00", "")       # Postgres text cannot hold NUL
         p.heading = p.heading.replace("\x00", "")
     title = title.replace("\x00", "")
+    # The header line that carries owner and version describes the whole document.
+    for p in passages[:3]:
+        if len(p.text) <= 160 and ("|" in p.text or _META_LINE.match(p.text)) \
+                and (_VERSION.search(p.text) or _OWNER.search(p.text)):
+            p.kind = "metadata"
     passages = [q for p in passages if p.text.strip() for q in _split_long(p)]
     if not passages:
         raise UnsupportedDocument("No readable text was found in this file.")

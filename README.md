@@ -29,11 +29,11 @@ To try it: open **Documents**, drop in the files from `samples/`, watch them go 
 |---|---|---|---|
 | 01 | Upload page with live status | Drag-and-drop upload. Status is pushed to the browser over server-sent events. | `frontend/src/DocumentsPage.tsx`, `GET /api/documents/events` |
 | 02 | Answer with exact passages and location | The answer is quoted from one passage, highlighted in place, with document, document version, page, section, clause or line. | `backend/app/qa.py`, `frontend/src/AskPage.tsx` |
-| 03 | Says so when unsupported, decided in code | Two checks in code: the passage must cover enough of the question, and every quote must exist word for word in the stored passage. | `backend/app/support.py` |
+| 03 | Says so when unsupported, decided in code | Checks in code: the passage must cover enough of the question and contain the word the question turns on, and every quote must exist word for word in the stored passage. | `backend/app/support.py` |
 | 04 | Background worker, no duplicates, clean replacement, crash-safe | Separate worker process. Jobs in Postgres with leases. Content hashing. One-transaction version swap. | `backend/app/worker.py`, `backend/app/documents.py` |
 | 05 | Swappable retrieval and answering, runs with no model | `Retriever` and `Answerer` interfaces chosen by environment variable. Default is BM25 keyword search with extractive answers. | `backend/app/retrieval/`, `backend/app/answering/` |
 | 06 | Under 2 seconds at 20 documents, page never freezes | About 1 ms per question at 20 documents (measured below). Uploads return before indexing starts. | `eval/run_eval.py --api` |
-| 07 | Simple API | Five endpoints, usable with curl. | `backend/app/main.py` |
+| 07 | Simple API | Upload, list, delete, ask and a live status stream, usable with curl. | `backend/app/main.py` |
 | 08 | One command | `docker compose up --build` | `docker-compose.yml` |
 | 09 | Azure infrastructure as code | Terraform, validated but not deployed, with the reasoning written down. | `infra/` |
 
@@ -46,10 +46,20 @@ No model takes part in this decision.
    passage must cover at least 55% of that total weight. "What is the policy on
    parental leave?" fails here: plenty of passages mention "policy", none mention
    "parental".
+   - A word found in the passage counts in full. A word found only in its section
+     heading counts half, and only in the document title a quarter. Naming a document
+     in the question is therefore not enough to get an answer from it.
+   - "Who approves...?" and "How do I book...?" questions turn on an action word. A
+     passage that does not contain it is rejected whatever its coverage.
+   - For a phrase such as "probation period", a passage with "probation" but not
+     "period" gets half credit for it, because it is probably about something else.
 2. **Quote check.** Whatever wrote the answer must return the exact text it relied on.
    The code looks that text up in the stored passage. A quote that is not there word
-   for word is discarded, and an answer with no surviving quote is replaced by "the
-   documents do not contain an answer". This is what makes a model safe to plug in.
+   for word, or is only a fragment, is discarded, and an answer with no surviving
+   quote is replaced by "the documents do not contain an answer".
+3. **Wording check.** An answer written by a model is compared with its quotes. If it
+   contains a number the quotes do not, or mostly words the quotes do not, the quote
+   itself is shown as the answer instead.
 
 When the system declines, it still shows the closest passages it found, labelled as
 not enough to answer, so a person can judge for themselves.
@@ -59,7 +69,8 @@ question words were and were not found.
 
 ## API
 
-All endpoints except `/api/health` need a login. Scripts can use HTTP Basic.
+Every endpoint that reads or changes data needs a login; scripts can use HTTP Basic.
+The health check, the login call and the API documentation page are open.
 
 ```bash
 # Upload one or more files (returns immediately; indexing runs in the worker)
@@ -114,17 +125,27 @@ An answer looks like this (shortened):
 
 ## Seeing crash recovery
 
+Slow the worker down so there is time to interrupt it. Put these two lines in a `.env`
+file next to `docker-compose.yml`:
+
+```
+INDEX_DELAY_SECONDS=4
+WORKER_LEASE_SECONDS=8
+```
+
+Then:
+
 ```bash
-INDEX_DELAY_SECONDS=4 WORKER_LEASE_SECONDS=8 docker compose up -d worker   # slow the worker down
-# upload a file in the UI, then while it shows "extracting":
+docker compose up -d worker          # restart the worker with those settings
+# upload a new file in the UI, and while it shows "extracting":
 docker compose kill -s KILL worker
 docker compose up -d worker
 ```
 
 The document stays at *extracting* until the dead worker's lease runs out (8 seconds
-here), then the job is picked up again and finishes. The Documents page shows
-"Attempt 2 (recovered after an interruption)". The same scenario is covered by
-`backend/tests/test_indexing.py`.
+here), then the job is picked up again and finishes. While it does, the Documents page
+shows "Attempt 2 (recovered after an interruption)". Remove the two lines from `.env`
+afterwards. The same scenario is covered by `backend/tests/test_indexing.py`.
 
 ## Configuration
 
@@ -153,24 +174,26 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 37 unit and integration tests
+make test        # 57 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency
 ```
 
-The golden set is 72 questions over 20 documents (the 5 samples plus 15 written for
-this assignment, in `eval/corpus/`). It is split into a dev half used for tuning and a
-test half kept apart. Results with the default settings:
+The golden set is 98 questions over 20 documents (the 5 samples plus 15 written for
+this assignment, in `eval/corpus/`). It has three parts: a dev split used for tuning, a
+test split, and a fresh split written after an independent review and before the fixes
+that followed it. Results with the default settings:
 
 | Split | Answerable: correct | Wrong passage | Declined wrongly | Unanswerable: declined | Answered wrongly |
 |---|---|---|---|---|---|
-| dev | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
-| test | 23 of 30 | 0 | 7 | 8 of 10 | 2 |
+| dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
+| test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
+| fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
 
-All 7 wrong refusals still showed the right passage under "closest passages".
-Latency through the API with 20 documents: median 1.0 ms, 95th percentile 1.5 ms,
-slowest 36 ms, over 216 requests on a laptop.
+All 6 wrong refusals still showed the right passage under "closest passages".
+Latency through the API with 20 documents: median 0.9 ms, 95th percentile 1.1 ms,
+slowest 18 ms, over 294 requests on a laptop.
 
 `NOTES.md` discusses what these numbers do and do not show.
 

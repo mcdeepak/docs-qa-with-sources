@@ -24,13 +24,17 @@ makes extractive answers good, because one passage is usually one rule. Table ro
 stored with their column headers so "P1 | 15 minutes" is still meaningful on its own.
 For PDFs I read font size and weight to find headings rather than relying on numbering.
 
-**Decide "supported" with two checks in code.** First, coverage: each question word is
+**Decide "supported" with checks in code.** First, coverage: each question word is
 weighed by how rare it is in the indexed documents, and the best passage must cover
-55% of the total. A word that appears in no document counts double. Second, quotes:
-the answerer must return the text it used, and the code confirms that text is in the
-stored passage word for word. I chose coverage over a raw search score because scores
-are not comparable between questions, while "how much of the question did we find" is,
-and it can be explained to a user. The UI shows it for every answer.
+55% of the total. A word that appears in no document counts double, and a word found
+only in a heading or title counts for less than one found in the passage. For "who
+approves..." and "how do I book..." questions the passage must contain the action word
+itself. Second, quotes: the answerer must return the text it used, and the code
+confirms that text is in the stored passage word for word. Third, wording: a
+model-written answer that contains a number its quotes do not is replaced by the quote.
+I chose coverage over a raw search score because scores are not comparable between
+questions, while "how much of the question did we find" is, and it can be explained to
+a user. The UI shows it for every answer.
 
 **Postgres for everything: documents, passages, file bytes and the job queue.** Saving
 an upload and queuing its job happen in one transaction. Jobs are claimed with
@@ -62,34 +66,45 @@ cannot weaken the guarantee.
 
 ## What the evaluation showed
 
-72 questions over 20 documents, split into a dev half that I tuned on and a test half.
+98 questions over 20 documents, in three parts: a dev split I tuned on, a test split,
+and a fresh split written after an independent review and before the fixes it led to.
 
 | Split | Correct | Wrong passage | Declined wrongly | Unanswerable declined | Answered wrongly |
 |---|---|---|---|---|---|
-| dev | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
-| test | 23 of 30 | 0 | 7 | 8 of 10 | 2 |
+| dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
+| test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
+| fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
 
-Latency through the API at 20 documents: median 1.0 ms, 95th percentile 1.5 ms.
+Latency through the API at 20 documents: median 0.9 ms, 95th percentile 1.1 ms.
 
 What I take from this:
 
-- The first version answered 73% correctly with 8 confident mistakes. The fixes that
-  mattered were ranking by coverage, treating "how long / how often / how many" as a
-  request for a quantity, keeping "10,000" as one number, and weighing words that
-  appear in no document more heavily.
-- When it is wrong, it is mostly wrong in the safe direction. All 7 wrong refusals on
-  the test split are wording gaps ("replaced" vs "refreshed", "fly" vs "flights",
-  "crypto" vs "cryptocurrency"), and in all 7 the right passage was still shown under
-  "closest passages".
-- The 2 confident mistakes are the real limit of keyword matching. "How long is the
-  probation period?" was answered from "sets probation goals within 30 days": every
-  important word is there, but the passage is about something else. Only meaning-aware
-  retrieval or a model reading the passage would catch that.
-- The test figure is somewhat optimistic. I could see the test failures while tuning,
-  and two general changes (irregular verb forms such as lost/lose, and treating
-  allowed/prohibited as one group) were prompted by them. I did not add synonyms to fix
-  individual test questions. All questions and 15 of the documents were written for
-  this assignment, so they share my blind spots.
+- The first version answered 73% correctly with 8 confident mistakes on the original
+  72 questions. The fixes that mattered were ranking by coverage, treating "how long /
+  how often / how many" as a request for a quantity, keeping "10,000" as one number,
+  and weighing words that appear in no document more heavily.
+- A second round came from an independent review of the finished code. It found that
+  naming a document in the question was enough to get an answer from it ("Who approved
+  the data retention policy?" was answered with an unrelated clause), because title
+  words counted in full. It also found extraction bugs that the sample files did not
+  trigger: table-like lines dropped as page footers, and "1.5 times the hourly rate"
+  read as clause 1.5. I wrote the fresh questions before fixing anything, so I could
+  measure the change. Wrong answers on the fresh split went from 3 to 0 and on the test
+  split from 2 to 0.
+- The honest figure for wording the system has not seen is the fresh split: 11 of 14
+  answered, and that did not move with the fixes. The 3 it declined are wording gaps
+  ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
+  wrong refusal across all splits, the right passage was still shown under "closest
+  passages".
+- No wrong answers on 98 questions does not mean none are possible. The rules are
+  still about words, not meaning. A passage that contains every important word of a
+  question while being about something else will still be accepted. Three of the fresh
+  unanswerable questions were the reviewer's own examples, so that split is not fully
+  blind either. All questions and 15 of the documents were written for this
+  assignment, so they share my blind spots.
+- Synonyms are the riskiest knob. Adding "responsible" to the owner group made
+  "response" match "owner" through word stems and broke the P1 question. The release
+  gate in the evaluation caught it before it was committed.
 
 ## What I left out, and why
 
@@ -97,8 +112,12 @@ What I take from this:
   model. The interface is there, but I spent the time on the refusal rule instead,
   which matters with or without embeddings.
 - **OCR.** A scanned PDF with no text layer is rejected with a clear message.
-- **Tables in PDFs.** Markdown tables are handled row by row. PDF tables are read as
-  lines of text, which works for simple ones only.
+- **Tables and columns in PDFs.** Markdown tables are handled row by row. PDF tables
+  are read as lines of text, which works for simple ones only, and a two-column page
+  layout is read across both columns and comes out scrambled.
+- **Re-indexing after a rule change.** Documents keep the passages they were split into
+  when uploaded. If the extraction rules change, a document has to be removed and
+  uploaded again to pick them up.
 - **A real model run.** The model answerer is tested with a simulated endpoint,
   including a model that invents a quote. I have not run it against a live model.
 - **Private networking, single sign-on and remote Terraform state** in the Azure
@@ -132,8 +151,13 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 37 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 57 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
+
+Before submitting I had a second AI session review the finished code with no knowledge
+of how it was built. It found real defects that the first had missed, including the
+document-name loophole described above. The fixes went in as separate pull requests,
+each with a regression test.
 
 The evaluation is where this mattered most. The first version looked right on the
 eight sample questions and scored 73% on the wider set, with 8 confident mistakes.

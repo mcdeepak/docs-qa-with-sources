@@ -9,6 +9,18 @@ terraform init -backend=false
 terraform validate
 ```
 
+If it were deployed, it would take two steps, because the container apps need an
+image that can only be pushed once the registry exists:
+
+```bash
+terraform apply -target=azurerm_container_registry.main   # 1. registry first
+docker build -t <registry>/docsqa:latest . && docker push <registry>/docsqa:latest
+terraform apply                                            # 2. everything else
+```
+
+A first apply can also fail writing Key Vault secrets while the deployer's role
+assignment is still propagating; running it again resolves that.
+
 ## What it defines
 
 | Resource | Purpose |

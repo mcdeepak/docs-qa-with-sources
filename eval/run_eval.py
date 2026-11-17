@@ -31,8 +31,8 @@ CORPUS_DIRS = [ROOT / "samples", ROOT / "eval" / "corpus"]
 
 # Release gates. A change that breaks one of these should not ship.
 GATE_DEV_HARMFUL = 0          # no confident mistakes on the tuning split
-GATE_MIN_CORRECT = 0.80       # share of answerable questions answered correctly, all splits
-GATE_MAX_HARMFUL = 5          # confident mistakes allowed across all questions
+GATE_MIN_CORRECT = 0.85       # share of answerable questions answered correctly, all splits
+GATE_MAX_HARMFUL = 2          # confident mistakes allowed across all questions
 
 
 def corpus_files() -> list[Path]:
@@ -192,7 +192,7 @@ def main() -> int:
         dev = [c for c in cases if c["split"] == "dev"]
         print("Dev split only. Harmful = wrong passage + false answer.\n")
         print(f"{'absent wt':<10}{'threshold':<10}{'correct':<9}{'false refusal':<15}{'harmful':<8}")
-        for absent in (1.0, 2.0, 3.0):
+        for absent in (1.0, 1.5, 2.0, 3.0):
             index = build_index(absent)
             for threshold in (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9):
                 s = summarise(run_offline(dev, threshold, index=index))

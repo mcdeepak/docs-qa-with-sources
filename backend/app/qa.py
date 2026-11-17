@@ -6,7 +6,7 @@ from . import index as corpus
 from .answering import get_answerer
 from .config import settings
 from .retrieval import get_retriever
-from .support import ScoredHit, check_quotes, passing, score_hits
+from .support import ScoredHit, check_quotes, grounded, passing, score_hits
 from .text import query_terms
 
 NOT_SUPPORTED = "The indexed documents do not contain an answer to this question."
@@ -53,6 +53,7 @@ def _passage(scored: ScoredHit) -> dict:
         "coverage": round(scored.coverage, 3),
         "matched_terms": scored.matched,
         "missing_terms": scored.missing,
+        "required_missing": scored.required_missing,
     }
 
 
@@ -86,6 +87,10 @@ def ask(question: str, index=None, retriever=None, answerer=None, threshold=None
     if not allowed:
         # Shown as "closest passages" so a person can see why we declined.
         result["closest"] = [_passage(s) for s in scored[:2]]
+        best = scored[0] if scored else None
+        if best and best.coverage >= threshold and best.required_missing:
+            word = best.required_missing[0]
+            return done(f"No passage says anything about \u201c{word}\u201d, which the question asks about.")
         return done("No passage covers enough of the question.")
 
     draft = answerer.answer(question, [s.hit for s in allowed])
@@ -97,6 +102,10 @@ def ask(question: str, index=None, retriever=None, answerer=None, threshold=None
 
     result["supported"] = True
     result["answer"] = draft.text
+    # Wording check: an answer the quotes do not back up is replaced by the quote.
+    if not grounded(draft.text, [src.quote for src in decision.sources], question):
+        result["answer"] = decision.sources[0].quote
+        result["answerer"] += " (wording replaced by the quote)"
     result["sources"] = [
         {**_passage(src.scored), "quote": src.quote, "highlight": [src.start, src.end]}
         for src in decision.sources

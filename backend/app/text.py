@@ -68,9 +68,32 @@ def stem(word: str) -> str:
     return _stemmer.stemWord(word)
 
 
+# Upper-case words such as "IT" and "US" are names, not the stop words "it" and "us".
+_ACRONYM = re.compile(r"\b[A-Z]{2,5}\b")
+ACRONYM_MARK = "xx"
+
+
+def _keep_acronyms(text: str) -> str:
+    if text.isupper():            # a question typed in capitals is not full of acronyms
+        return text
+
+    def mark(m: re.Match) -> str:
+        word = m.group(0).lower()
+        return word + ACRONYM_MARK if word in STOP_WORDS else m.group(0)
+
+    return _ACRONYM.sub(mark, text)
+
+
+def display(word: str) -> str:
+    """The word as a person would write it (undoes the acronym marker)."""
+    if word.endswith(ACRONYM_MARK) and word[:-len(ACRONYM_MARK)] in STOP_WORDS:
+        return word[:-len(ACRONYM_MARK)].upper()
+    return word
+
+
 def words(text: str) -> list[str]:
     """Lowercased word tokens. Hyphens and apostrophes split words."""
-    text = text.lower().replace("’", "'")
+    text = _keep_acronyms(text).lower().replace("’", "'")
     text = re.sub(r"'s\b", "", text)
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)   # 10,000 -> 10000
     text = _ALIAS.sub(lambda m: ALIASES[m.group(0)], text)
@@ -112,11 +135,35 @@ class QueryTerm:
     # A frame term asks for a quantity ("how long"). A passage with a number or a
     # frequency word satisfies it.
     frame: bool = False
+    # The action or subject the question turns on ("who approves...", "how do I book...").
+    # A passage that does not contain it cannot support an answer.
+    required: bool = False
+    # True when the next term follows this one directly in the question, as in
+    # "probation period". Used to check that a passage has the phrase, not just a part.
+    joined_to_next: bool = False
+
+
+_HOW_AUX = frozenset("do does did can could should would must may".split())
+
+
+def _required_position(tokens: list[str]) -> int | None:
+    """Position of the word a "who ..." or "how do I ..." question turns on: the first
+    content word after the question opener. None for other kinds of question."""
+    for i, w in enumerate(tokens):
+        opener = w == "who" or (w == "how" and i + 1 < len(tokens) and tokens[i + 1] in _HOW_AUX)
+        if not opener:
+            continue
+        for j in range(i + 1, len(tokens)):
+            if not is_stop(tokens[j]):
+                return j
+        return None
+    return None
 
 
 def query_terms(question: str) -> list[QueryTerm]:
     tokens = words(question)
-    terms: list[QueryTerm] = []
+    required_at = _required_position(tokens)
+    found: list[tuple[int, QueryTerm]] = []
     seen: set[str] = set()
     for i, w in enumerate(tokens):
         frame = i > 0 and tokens[i - 1] == "how" and w in HOW_FRAME
@@ -131,7 +178,13 @@ def query_terms(question: str) -> list[QueryTerm]:
             matches.add(s[2:])                       # "uncollected" also matches "collected"
         if settings.use_synonyms:
             matches |= _synonym_groups().get(s, frozenset())
-        terms.append(QueryTerm(stem=s, word=w, matches=frozenset(matches), frame=frame))
+        found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches),
+                                   frame=frame, required=(i == required_at and not frame))))
+    terms = []
+    for n, (i, term) in enumerate(found):
+        nxt = found[n + 1] if n + 1 < len(found) else None
+        joined = bool(nxt and nxt[0] == i + 1 and not term.frame and not nxt[1].frame)
+        terms.append(QueryTerm(term.stem, term.word, term.matches, term.frame, term.required, joined))
     return terms
 
 
