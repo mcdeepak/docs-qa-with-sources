@@ -1,5 +1,6 @@
 import { DragEvent, useRef, useState } from "react";
 import { api, Doc, Me, UploadResult } from "./api";
+import { FileIcon, UploadIcon } from "./icons";
 
 const STAGES = ["queued", "extracting", "chunking", "indexing", "ready"];
 
@@ -55,6 +56,13 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
 
   return (
     <div className="page">
+      <div className="page-head">
+        <h1>Documents</h1>
+        <p className="muted">
+          Upload policies and procedures. Each file is indexed in the background and its status updates here as it happens.
+        </p>
+      </div>
+
       <div
         className={dragging ? "dropzone dragging" : "dropzone"}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -64,6 +72,7 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
       >
         <input ref={input} type="file" multiple hidden accept={me.accepted_types.join(",")}
                onChange={(e) => upload(Array.from(e.target.files ?? []))} />
+        <div className="dropzone-icon"><UploadIcon size={22} /></div>
         <strong>{uploading ? "Uploading…" : "Drop files here or click to choose"}</strong>
         <div className="muted small">
           {me.accepted_types.join(", ")} · up to {me.max_upload_mb} MB each · uploading a changed file replaces the old version
@@ -88,7 +97,7 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
       {docs.length === 0 ? (
         <div className="notice">Nothing uploaded yet.</div>
       ) : (
-        <table>
+        <div className="table-wrap"><table>
           <thead>
             <tr><th>Document</th><th>Status</th><th>Passages</th><th>Uploaded</th><th /></tr>
           </thead>
@@ -96,12 +105,17 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
             {docs.map((d) => (
               <tr key={d.id}>
                 <td>
-                  <strong>{d.title ?? d.filename}</strong>
-                  {d.doc_version && <span className="pill">version {d.doc_version}</span>}
-                  <div className="muted small">{d.filename}{d.doc_owner && <> · owner: {d.doc_owner}</>}</div>
+                  <div className="doc-name">
+                    <FileIcon />
+                    <div>
+                      <strong>{d.title ?? d.filename}</strong>
+                      {d.doc_version && <span className="pill">version {d.doc_version}</span>}
+                      <div className="muted small">{d.filename}{d.doc_owner && <> · owner: {d.doc_owner}</>}</div>
+                    </div>
+                  </div>
                 </td>
                 <td><Status doc={d} /></td>
-                <td>{d.status === "ready" ? d.chunk_count : "–"}</td>
+                <td className="num">{d.status === "ready" ? d.chunk_count : "–"}</td>
                 <td className="small when">{when(d.uploaded_at)}<div className="muted">upload {d.version_no}</div></td>
                 <td>
                   <button className="link danger" onClick={() => {
@@ -111,7 +125,7 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );

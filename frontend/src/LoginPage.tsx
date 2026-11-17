@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api, Unauthorised } from "./api";
+import { Logo } from "./icons";
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState("");
@@ -20,7 +21,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="login">
       <form className="card" onSubmit={submit}>
-        <h1>Policy Q&amp;A</h1>
+        <div className="brand"><Logo size={30} />Policy Q&amp;A</div>
         <p className="muted">Ask questions about your policies and see exactly where each answer comes from.</p>
         <label>Username<input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus /></label>
         <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>

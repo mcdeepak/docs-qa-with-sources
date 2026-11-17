@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, Doc, Me, Unauthorised } from "./api";
 import { AskPage } from "./AskPage";
 import { DocumentsPage } from "./DocumentsPage";
+import { Logo } from "./icons";
 import { LoginPage } from "./LoginPage";
 
 type Tab = "ask" | "documents";
@@ -47,18 +48,18 @@ export function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand">Policy Q&amp;A</div>
+        <div className="brand"><Logo /><span>Policy Q&amp;A</span></div>
         <nav>
-          <button className={tab === "ask" ? "tab active" : "tab"} onClick={() => setTab("ask")}>
+          <button className={tab === "ask" ? "tab active" : "tab"} aria-current={tab === "ask" ? "page" : undefined} onClick={() => setTab("ask")}>
             Ask
           </button>
-          <button className={tab === "documents" ? "tab active" : "tab"} onClick={() => setTab("documents")}>
+          <button className={tab === "documents" ? "tab active" : "tab"} aria-current={tab === "documents" ? "page" : undefined} onClick={() => setTab("documents")}>
             Documents
             {busy > 0 && <span className="pill busy">{busy} indexing</span>}
           </button>
         </nav>
         <div className="topbar-right">
-          <span className="muted small">{me.retriever} + {me.answerer}</span>
+          <span className="engine" title="Retrieval and answering methods in use">{me.retriever} + {me.answerer}</span>
           <button className="link" onClick={() => api.logout().then(() => setMe(null))}>Sign out</button>
         </div>
       </header>
