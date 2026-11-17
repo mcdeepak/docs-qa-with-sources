@@ -128,3 +128,91 @@ def test_aliases_only_match_whole_words():
     from app.text import words
     assert words("Design in the open") == ["design", "in", "the", "open"]
     assert words("Use Wi-Fi to sign in") == ["use", "wifi", "to", "signin"]
+
+
+# ---------------------------------------------------------------- stricter support rules
+
+def index_of(documents: dict[str, str]):
+    """An in-memory index built from Markdown text."""
+    from app.extract import extract
+    from app.index import Chunk, CorpusIndex
+
+    chunks, cid = [], 0
+    for doc_id, (name, text) in enumerate(documents.items()):
+        ex = extract(text.encode(), name)
+        for i, p in enumerate(ex.passages):
+            cid += 1
+            chunks.append(Chunk(cid, doc_id, name, ex.title, ex.doc_version, ex.doc_owner, 1,
+                                "", i, p.kind, p.text, p.heading, p.page, p.clause, p.line))
+    return CorpusIndex(chunks)
+
+
+OFFICE = {
+    "onboarding.md": "# Onboarding Checklist\n\n## First month\n- The hiring manager sets probation goals within 30 days.\n"
+                     "- The hiring manager assigns an onboarding buddy.\n",
+    "desk.md": "# Clean Desk Policy\n\n## Rooms\n- Whiteboards in meeting rooms must be wiped after use.\n",
+    "devices.md": "# Device Policy\n\n**Owner:** IT Operations  |  **Version:** 2.0\n\n## Laptops\n- Laptops are refreshed every 4 years.\n",
+    "travel.md": "# Travel Policy\n\n## Flights\n- Flights must be booked at least 14 days before departure.\n",
+}
+
+
+@pytest.mark.parametrize("question", [
+    "Who approved the data retention policy?",       # names a document; no passage says who approved it
+    "Who wrote the incident response procedure?",
+])
+def test_naming_a_document_is_not_enough_to_get_an_answer(sample_index, question):
+    assert ask(sample_index, question)["supported"] is False
+
+
+def test_a_how_to_question_needs_its_action_word_in_the_passage():
+    result = ask(index_of(OFFICE), "How do I book a meeting room?")
+    assert result["supported"] is False
+    assert "book" in result["reason"]
+
+
+def test_half_of_a_phrase_is_not_enough():
+    # "probation goals within 30 days" is not about the probation period.
+    assert ask(index_of(OFFICE), "How long is the probation period?")["supported"] is False
+
+
+def test_an_upper_case_acronym_is_not_a_stop_word():
+    from app.text import words
+    assert "itxx" in words("Who is the IT manager?")
+    assert "itxx" not in words("WHO IS THE IT MANAGER?")        # all capitals: not acronyms
+    assert ask(index_of(OFFICE), "Who is the IT manager?")["supported"] is False
+
+
+def test_common_wording_differences_are_bridged():
+    result = ask(index_of(OFFICE), "How often are laptops replaced?")
+    assert result["supported"] is True and "every 4 years" in result["answer"]
+
+
+class FragmentAnswerer:
+    """Stands in for a model that writes its own answer and cites a meaningless fragment."""
+    name = "fragment"
+
+    def answer(self, question, hits):
+        return Draft(text="Backups are kept for 7 years and may be shared with anyone.",
+                     quotes=[Quote(hits[0].chunk.id, "a")])
+
+
+def test_a_fragment_is_not_accepted_as_a_quote(sample_index):
+    assert ask(sample_index, "How long are backups kept?", answerer=FragmentAnswerer())["supported"] is False
+
+
+def test_an_answer_that_contradicts_its_own_quote_is_replaced_by_the_quote(sample_index):
+    reply = json.dumps({"answer": "Passwords must be at least 8 characters long.",
+                        "quotes": [{"passage": 1, "text": "Passwords must be at least 14 characters long."}]})
+    result = ask(sample_index, "How long must a password be?", answerer=llm_with_reply(reply))
+    assert result["supported"] is True
+    assert result["answer"] == "Passwords must be at least 14 characters long."
+    assert "wording replaced" in result["answerer"]
+
+
+def test_questions_about_a_document_owner_and_version_use_its_header_line(sample_index):
+    owner = ask(sample_index, "Who owns the device and laptop policy?")
+    assert owner["supported"] is True and "IT Operations" in owner["answer"]
+    assert owner["sources"][0]["filename"] == "device-and-laptop-policy.md"
+    version = ask(sample_index, "What version is the remote work and VPN policy?")
+    assert version["supported"] is True and "3.0" in version["answer"]
+    assert version["sources"][0]["filename"] == "remote-work-and-vpn-policy.pdf"

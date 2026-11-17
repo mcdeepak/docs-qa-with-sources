@@ -44,6 +44,9 @@ function Why({ a }: { a: Answer }) {
           <li>Best passage covers {Math.round(best.coverage * 100)}% of the question.</li>
           {best.matched_terms.length > 0 && <li>Found: {best.matched_terms.join(", ")}</li>}
           {best.missing_terms.length > 0 && <li>Not found: {best.missing_terms.join(", ")}</li>}
+          {best.required_missing.length > 0 && (
+            <li>The question turns on “{best.required_missing.join(", ")}”, which this passage does not mention.</li>
+          )}
         </ul>
       )}
       <p className="muted small">

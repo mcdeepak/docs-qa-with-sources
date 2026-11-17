@@ -39,6 +39,7 @@ export interface Passage {
   coverage: number;
   matched_terms: string[];
   missing_terms: string[];
+  required_missing: string[];
   quote?: string;
   highlight?: [number, number];
 }

@@ -25,4 +25,11 @@ holiday, vacation
 sick, ill, illness, unwell
 length, long
 minimum, least
-maximum, most, limit
+maximum, most, limit, allowance, cap
+licence, license, licensed, licensing
+replace, refresh, renew
+finish, complete
+fly, flight
+auto, automatic
+crypto, cryptocurrency
+own, owns, owner
