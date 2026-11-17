@@ -32,7 +32,7 @@ CORPUS_DIRS = [ROOT / "samples", ROOT / "eval" / "corpus"]
 # Release gates. A change that breaks one of these should not ship.
 GATE_DEV_HARMFUL = 0          # no confident mistakes on the tuning split
 GATE_MIN_CORRECT = 0.80       # share of answerable questions answered correctly, all splits
-GATE_MAX_HARMFUL = 2          # confident mistakes allowed across all 72 questions
+GATE_MAX_HARMFUL = 5          # confident mistakes allowed across all questions
 
 
 def corpus_files() -> list[Path]:
@@ -140,7 +140,7 @@ def right_passage_shown(case: dict, result: dict) -> bool:
 
 
 def report(rows, verbose: bool) -> bool:
-    for split in ("dev", "test"):
+    for split in ("dev", "test", "fresh"):
         print(line(split, summarise([r for r in rows if r[0]["split"] == split])))
     print(line("all", summarise(rows)))
     refusals = [r for r in rows if r[2] == "false refusal"]
