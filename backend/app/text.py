@@ -23,7 +23,7 @@ she should so than that the their theirs them then there these they this those t
 too us was we were what when where which who whom whose why will with would you your
 yours am any about also not no yes get got please tell know want there's using use
 used how must shall may might give take need make put go let someone somebody anyone
-anybody everyone
+anybody everyone exactly
 """.split())
 
 # Words that follow "how" and ask for a quantity rather than name a topic ("how long",
@@ -156,6 +156,66 @@ def _synonym_groups() -> dict[str, frozenset[str]]:
     return {k: frozenset(v) for k, v in groups.items()}
 
 
+# Comparatives that mean the opposite of each other. A rule about contracts "longer than
+# 12 months" says nothing about "shorter" ones, so the opposite word in a passage is a
+# contradiction, not a near miss.
+OPPOSITES = {"shorter": "longer", "longer": "shorter", "fewer": "more", "less": "more", "more": "less",
+             "below": "above", "above": "below", "lower": "higher", "higher": "lower",
+             "minimum": "maximum", "maximum": "minimum", "smaller": "larger", "larger": "smaller",
+             "earlier": "later", "later": "earlier"}
+
+# A question that opens with one of these asks whether something is so ("Are backups kept
+# for 90 days?"). A number in it is a claim to check, and the passage may well state a
+# different one. In any other question a number picks out what is being asked about.
+YES_NO_OPENERS = frozenset(
+    "is are was were am do does did can could should would will may must has have had".split())
+
+# ---------------------------------------------------------------- numeric ranges
+# A span is (low, high, low included, high included). "Up to 2,000 dollars" is
+# (-inf, 2000, True, True) in dollars; "above 10,000 dollars" is (10000, inf, False, True).
+Span = tuple[float, float, bool, bool]
+_INF = float("inf")
+_NUM = r"(?<![\w.])(\d+(?:\.\d+)?)"
+_UNIT = r"(?:\s+([a-z]+))?"
+_RANGE_PATTERNS = [
+    (re.compile(rf"between\s+{_NUM}\s+and\s+{_NUM}{_UNIT}"), "between"),
+    (re.compile(rf"{_NUM}\s*(?:to|-|\u2013)\s*{_NUM}{_UNIT}"), "between"),
+    (re.compile(rf"(?:up to|at most|no more than|not more than|maximum of)\s+{_NUM}{_UNIT}"), "at most"),
+    (re.compile(rf"(?:under|below|less than|fewer than|shorter than)\s+{_NUM}{_UNIT}"), "below"),
+    (re.compile(rf"(?:above|over|more than|greater than|longer than|exceeding)\s+{_NUM}{_UNIT}"), "above"),
+    (re.compile(rf"(?:at least|minimum of|no less than|not less than)\s+{_NUM}{_UNIT}"), "at least"),
+]
+
+
+def number_ranges(text: str) -> list[tuple[Span, str]]:
+    """The numeric ranges a text states, each with the stem of its unit word. A range
+    with no unit word after it is ignored: without a unit it cannot be compared."""
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text.lower())
+    found = []
+    for pattern, kind in _RANGE_PATTERNS:
+        for m in pattern.finditer(text):
+            unit = m.groups()[-1]
+            if not unit or is_stop(unit):
+                continue
+            a = float(m.group(1))
+            span = {"between": lambda: (a, float(m.group(2)), True, True),
+                    "at most": lambda: (-_INF, a, True, True),
+                    "below": lambda: (-_INF, a, True, False),
+                    "above": lambda: (a, _INF, False, True),
+                    "at least": lambda: (a, _INF, True, True)}[kind]()
+            found.append((span, stem(unit)))
+    return found
+
+
+def _holds(span: Span, x: float) -> bool:
+    return (span[0] < x or (span[0] == x and span[2])) and (x < span[1] or (x == span[1] and span[3]))
+
+
+def spans_overlap(a: Span, b: Span) -> bool:
+    low, high = max(a[0], b[0]), min(a[1], b[1])
+    return low < high or (low == high and _holds(a, low) and _holds(b, low))
+
+
 # Units of time say how much, not what about: "how many days" has no topic.
 UNIT_STEMS = frozenset(stem(w) for w in "second minute hour day week month year".split())
 
@@ -181,6 +241,13 @@ class QueryTerm:
     # Stands for the "not" in a negative question. Only a passage that states a
     # negative or an exception satisfies it.
     negation: bool = False
+    # For a number that picks out what is asked about ("Tier 4", "5,000 dollars"): the
+    # stems of the content words just before and just after it in the question.
+    before: str = ""
+    after: str = ""
+    # For such a number, the values the question means: 5000 exactly for "5,000 dollars",
+    # everything above 10000 for "above 10,000 dollars".
+    span: Span | None = None
 
     @property
     def topic(self) -> bool:
@@ -228,6 +295,8 @@ def _negated_position(tokens: list[str]) -> int | None:
 def query_terms(question: str) -> list[QueryTerm]:
     tokens = words(question)
     required_at = {_required_position(tokens), _negated_position(tokens)}
+    selects_by_number = bool(tokens) and tokens[0] not in YES_NO_OPENERS
+    asked_ranges = number_ranges(question) if selects_by_number else []
     found: list[tuple[int, QueryTerm]] = []
     seen: set[str] = set()
     for i, w in enumerate(tokens):
@@ -241,6 +310,15 @@ def query_terms(question: str) -> list[QueryTerm]:
         matches = {s}
         # "uncollected" can be answered by "not collected", never by "collected" alone.
         opposite = s[2:] if len(s) >= 6 and s.startswith("un") else ""
+        if w in OPPOSITES:
+            opposite = stem(OPPOSITES[w])
+        before = after = ""
+        span = None
+        if s.isdigit() and selects_by_number:
+            before = next((stem(t) for t in reversed(tokens[:i]) if not is_stop(t)), "")
+            after = next((stem(t) for t in tokens[i + 1:] if not is_stop(t)), "")
+            value = float(s)
+            span = next((r for r, _ in asked_ranges if value in (r[0], r[1])), (value, value, True, True))
         # The word a "who approves..." question turns on must be in the passage itself,
         # or a form of the same word ("owns" / "owner"). A looser synonym is not enough
         # there: "approve" shares a group with "allowed" and "prohibited", and a ban
@@ -250,7 +328,8 @@ def query_terms(question: str) -> list[QueryTerm]:
             group = _synonym_groups().get(s, frozenset())
             matches |= {m for m in group if m[:3] == s[:3]} if is_required else group
         found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches), frame=frame,
-                                   required=is_required, opposite=opposite)))
+                                   required=is_required, opposite=opposite,
+                                   before=before, after=after, span=span)))
     terms = []
     for n, (i, term) in enumerate(found):
         nxt = found[n + 1] if n + 1 < len(found) else None

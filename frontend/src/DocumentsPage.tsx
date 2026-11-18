@@ -64,9 +64,7 @@ export function DocumentsPage({ docs, live, me }: { docs: Doc[]; live: boolean; 
     <div className="page">
       <div className="page-head">
         <h1>Documents</h1>
-        <p className="muted">
-          Upload policies and procedures. Each file is indexed in the background and its status updates here as it happens.
-        </p>
+        <p className="muted">Upload PDF or Markdown files. Status updates live.</p>
       </div>
 
       <div

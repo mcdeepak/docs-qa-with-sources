@@ -67,14 +67,16 @@ cannot weaken the guarantee.
 
 ## What the evaluation showed
 
-98 questions over 20 documents, in three parts: a dev split I tuned on, a test split,
-and a fresh split written after an independent review and before the fixes it led to.
+106 questions over 20 documents, in four parts: a dev split I tuned on, a test split,
+a fresh split written after an independent review and before the fixes it led to, and
+a review split of an outside reviewer's own cases.
 
 | Split | Correct | Wrong passage | Declined wrongly | Unanswerable declined | Answered wrongly |
 |---|---|---|---|---|---|
 | dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
 | test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
 | fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
+| review | 6 of 6 | 0 | 0 | 2 of 2 | 0 |
 
 Latency through the API at 20 documents: median 0.9 ms, 95th percentile 1.1 ms.
 
@@ -92,7 +94,7 @@ What I take from this:
   read as clause 1.5. I wrote the fresh questions before fixing anything, so I could
   measure the change. Wrong answers on the fresh split went from 3 to 0 and on the test
   split from 2 to 0.
-- A third round was adversarial. I had a different AI model look for inputs that
+- A third round was adversarial. I had an independent AI review look for inputs that
   would break it, then tried about 120 odd questions against the 20 documents. Every
   case was reproduced before anything was changed. About ten were wrong answers shown
   as supported: "When is MFA not required?" answered with the rule that it is
@@ -101,13 +103,21 @@ What I take from this:
   general rule with a test: negative questions, numbers without a unit, one-word
   questions, and passages that match only one of the things asked about. It also
   showed my evaluation graded the whole passage rather than the sentence displayed.
-  It now grades the displayed quote, and the figures did not change.
+  It now grades the displayed quote, and the figures did not change. A second pass by
+  the same reviewer found three more, all about numbers: "Tier 4" answered from a Tier
+  2 row that says "4 hours", "5,000 dollars" answered from the "up to 2,000 dollars"
+  row, and "shorter than 12 months" answered by a rule about "longer than". Those
+  questions are the review split. A number must now stand beside the same word as
+  in the question, and ranges such as "2,001 to 10,000 dollars" are read as ranges,
+  so 5,000 dollars finds its row. That is pattern matching on a fixed list of
+  phrasings, not arithmetic in general: "15 working days" against "more than 10
+  consecutive working days" is still declined.
 - The honest figure for wording the system has not seen is the fresh split: 11 of 14
   answered, and that did not move with the fixes. The 3 it declined are wording gaps
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
   wrong refusal across all splits, the right passage was still shown under "closest
   passages".
-- No wrong answers on 98 questions does not mean none are possible, and that round
+- No wrong answers on 106 questions does not mean none are possible, and that round
   proved it. The rules are about words, not meaning. Three cases I know of and left:
   "How often are laptops backed up?" is answered with "File shares are backed up
   nightly"; "Does Payroll approve badge requests?" is answered from "Payroll approves
@@ -168,14 +178,13 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 70 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 81 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
-Before submitting I had the finished code reviewed twice by AI with no knowledge of
-how it was built: a second Claude session, then ChatGPT, which I asked for inputs
-that would break it. I had every finding reproduced before accepting it. Some were
-real and were fixed with regression tests, some were already handled, and one
-contradicted the brief.
+Before submitting I had the finished code reviewed again by AI, with no knowledge of
+how it was built, and asked for inputs that would break it. I had every finding
+reproduced before accepting it. Some were real and were fixed with regression tests,
+some were already handled, and one contradicted the brief.
 
 The evaluation is where this mattered most. The first version looked right on the
 eight sample questions and scored 73% on the wider set, with 8 confident mistakes.

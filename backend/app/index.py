@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from . import db
 from .config import settings
 from .text import (FRAME_WEIGHT, MEASURE_FRAME, QueryTerm, analyse, has_measure, has_quantity,
-                   states_negative, words)
+                   number_ranges, spans_overlap, states_negative, words)
 
 HEADING_WEIGHT = 0.5   # a term in the section heading counts as half a body term
 TITLE_WEIGHT = 0.25    # a term in the document title counts for a quarter
@@ -67,6 +67,10 @@ class CorpusIndex:
         self.measure: list[bool] = [has_measure(c.text) for c in chunks]
         self.negative: list[bool] = [states_negative(c.text) for c in chunks]
         self.length: list[float] = []
+        # The content words of each passage in order, to check what stands beside a number.
+        self.sequence: list[list[str]] = [analyse(c.text) for c in chunks]
+        # Numeric ranges each passage states ("2,001 to 10,000 dollars"), with their unit.
+        self.ranges = [number_ranges(c.text) for c in chunks]
         df: Counter = Counter()
         for c in chunks:
             tf: dict[str, float] = {}
@@ -123,6 +127,9 @@ class CorpusIndex:
             return 1.0
         if term.matches & self.body[chunk_pos]:
             return 1.0
+        # An amount that falls inside a range the passage states counts as found.
+        if any(spans_overlap(term.span, r) for r in self.ranges_in_unit(term, chunk_pos)):
+            return 1.0
         if self.opposite_matches(term, chunk_pos) and self.negative[chunk_pos]:
             return 1.0
         if term.matches & self.heading[chunk_pos]:
@@ -134,6 +141,33 @@ class CorpusIndex:
     def frame_answered(self, term: QueryTerm, chunk_pos: int) -> bool:
         """Does the passage contain the kind of quantity a "how long/many" term asks for?"""
         return (self.measure if term.word.lower() in MEASURE_FRAME else self.quantity)[chunk_pos]
+
+    def ranges_in_unit(self, term: QueryTerm, chunk_pos: int) -> list:
+        if term.span is None or not term.after:
+            return []
+        return [r for r, unit in self.ranges[chunk_pos] if unit == term.after]
+
+    def number_in_place(self, term: QueryTerm, chunk_pos: int, reach: int = 2) -> bool:
+        """For a number that picks out what is asked about: is it in the passage beside
+        the same word as in the question? "Tier 4" is not found in a row about Tier 2
+        that happens to say "4 hours", and "5,000 dollars" is not found in a row about
+        "2,000 dollars". Within two words, so "2,001 to 10,000 dollars" has both amounts."""
+        if not (term.before or term.after):
+            return True
+        # Where the passage states ranges in the same unit, the ranges decide: 5,000
+        # dollars belongs to "2,001 to 10,000 dollars" and not to "above 10,000 dollars".
+        same_unit = self.ranges_in_unit(term, chunk_pos)
+        if same_unit:
+            return any(spans_overlap(term.span, r) for r in same_unit)
+        seq = self.sequence[chunk_pos]
+        for i, word in enumerate(seq):
+            if word != term.stem:
+                continue
+            if term.before and term.before in seq[max(0, i - reach):i]:
+                return True
+            if term.after and term.after in seq[i + 1:i + 1 + reach]:
+                return True
+        return False
 
     def opposite_matches(self, term: QueryTerm, chunk_pos: int) -> bool:
         return bool(term.opposite) and term.opposite in self.body[chunk_pos]
@@ -163,6 +197,9 @@ class CorpusIndex:
                 required_missing.append(t.word or t.stem)
             # "How long ...?" cannot be answered by a passage that states no quantity.
             elif t.frame and c == 0:
+                required_missing.append(t.word or t.stem)
+            # "Tier 4" asked, and the passage is not about Tier 4.
+            elif not self.number_in_place(t, chunk_pos):
                 required_missing.append(t.word or t.stem)
             # "unapproved" asked, "approved" stated: the passage says the opposite.
             elif c == 0 and self.opposite_matches(t, chunk_pos):

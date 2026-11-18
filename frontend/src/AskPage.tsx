@@ -59,7 +59,10 @@ function Why({ a }: { a: Answer }) {
         </>
       )}
       <p className="muted small">
-        {a.retriever} retrieval · {a.answerer} answer · {a.documents_indexed} documents · {a.took_ms} ms
+        {a.retriever === "bm25" ? "Keyword search (BM25)" : `${a.retriever} search`}
+        {" · "}
+        {a.answerer === "extractive" ? "answer copied from the document, no AI model" : `answer written by ${a.answerer}, checked in code`}
+        {" · "}{a.documents_indexed} documents · {a.took_ms} ms
       </p>
     </details>
   );
@@ -89,11 +92,8 @@ export function AskPage({ readyCount, goToDocuments }: { readyCount: number; goT
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Ask your documents</h1>
-        <p className="muted">
-          Every answer is quoted word for word from a document you uploaded. If the documents
-          do not cover the question, you are told so.
-        </p>
+        <h1>Ask about your policies</h1>
+        <p className="muted">Answers are quoted from your documents, with the source shown.</p>
       </div>
 
       <form className="ask" onSubmit={submit}>

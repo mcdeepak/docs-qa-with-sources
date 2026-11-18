@@ -2,6 +2,7 @@
 #
 # split: dev  -> used to choose the threshold and synonyms.
 # split: test -> held out. Never used for tuning; this is the number to trust.
+# split: fresh / review -> written after later review rounds; see eval/README.md.
 #
 # Answerable questions name the file and a phrase that the cited passage must contain.
 # A list of phrases means any one of them is acceptable (the question has two valid answers).
@@ -122,3 +123,15 @@
 - {split: fresh, q: "How often is the fire alarm tested?", answerable: false}
 - {split: fresh, q: "Who approves overtime?", answerable: false}
 - {split: fresh, q: "When is the office Christmas party?", answerable: false}
+
+# ---------------------------------------------------------------- review: an outside reviewer's cases
+# Four questions a second reviewer found, plus controls. Three were answered wrongly when
+# reported. The amount questions need the range in the table row to be read as a range.
+- {split: review, q: "What is the recovery time objective for Tier 4 systems?", answerable: false}
+- {split: review, q: "When are contracts shorter than 12 months reviewed by Legal?", answerable: false}
+- {split: review, q: "What is the recovery time objective for Tier 3 systems?", file: backup-and-recovery-standard.md, contains: "Recovery time objective: 72 hours"}
+- {split: review, q: "When are contracts longer than 12 months reviewed by Legal?", file: vendor-and-procurement-policy.md, contains: "longer than 12 months are reviewed by Legal"}
+- {split: review, q: "Who approves purchases of 2,000 dollars?", file: vendor-and-procurement-policy.md, contains: "Line manager"}
+- {split: review, q: "Who approves purchases of 5,000 dollars?", file: vendor-and-procurement-policy.md, contains: "Department head"}
+- {split: review, q: "Who approves purchases of exactly 10,000 dollars?", file: vendor-and-procurement-policy.md, contains: "Department head"}
+- {split: review, q: "Who approves purchases of 10,001 dollars?", file: vendor-and-procurement-policy.md, contains: "Chief Financial Officer"}
