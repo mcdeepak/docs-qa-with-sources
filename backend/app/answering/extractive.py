@@ -7,11 +7,17 @@ SHORT_PASSAGE = 300        # passages this short are quoted whole
 
 
 def best_sentence(question: str, passage: str) -> str:
-    """The sentence of the passage that shares the most question terms."""
+    """The sentence of the passage that shares the most question terms. When the
+    question asks for a quantity ("how long"), only sentences that contain one are
+    considered, so the sentence shown is the one that states the answer."""
     spans = sentences(passage)
     if len(passage) <= SHORT_PASSAGE or len(spans) <= 1:
         return passage
     terms = query_terms(question)
+    for frame in (t for t in terms if t.frame):
+        stating = [s for s in spans if frame.answered_by(passage[s[0]:s[1]])]
+        if stating:
+            spans = stating
 
     def overlap(span: tuple[int, int]) -> int:
         stems = set(analyse(passage[span[0]:span[1]]))

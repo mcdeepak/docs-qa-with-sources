@@ -169,3 +169,32 @@ def test_a_finished_job_that_runs_again_cannot_undo_a_newer_upload(database):
     doc = status_of("device-and-laptop-policy.md")
     assert doc["status"] == "ready" and doc["version_no"] == 2
     assert "every 3 years" in qa.ask("How often are laptops refreshed?")["answer"]
+
+
+def test_a_version_that_finished_on_the_last_attempt_is_not_marked_failed(database):
+    """Regression: the worker died after publishing on its final attempt, before marking
+    the job done. The next claim used to label the working version as failed."""
+    documents.upload("data-retention-policy.pdf", RETENTION)
+    worker.index_version(worker.claim()["version_id"])       # published, job never acknowledged
+    with database.pool().connection() as conn:
+        conn.execute("UPDATE jobs SET attempts = 3, leased_until = now() - interval '1 second'")
+
+    again = worker.claim()
+    assert again["attempts"] == 4                             # past the limit
+    worker.run_job(again)
+
+    assert status_of("data-retention-policy.pdf")["status"] == "ready"
+    assert count(database, "SELECT count(*) FROM jobs WHERE state = 'done'") == 1
+    assert qa.ask("How long are backups kept?")["supported"] is True
+
+
+def test_a_stale_worker_cannot_change_a_version_that_is_already_ready(database):
+    documents.upload("data-retention-policy.pdf", RETENTION)
+    version_id = worker.claim()["version_id"]
+    worker.index_version(version_id)
+
+    import pytest
+    with pytest.raises(worker.Superseded):
+        worker._set_stage(version_id, "extracting")
+    assert worker._fail_version(version_id, "late error from a stale worker") is False
+    assert status_of("data-retention-policy.pdf")["status"] == "ready"

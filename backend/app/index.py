@@ -11,7 +11,8 @@ from dataclasses import dataclass
 
 from . import db
 from .config import settings
-from .text import FRAME_WEIGHT, QueryTerm, analyse, has_quantity, words
+from .text import (FRAME_WEIGHT, MEASURE_FRAME, QueryTerm, analyse, has_measure, has_quantity,
+                   states_negative, words)
 
 HEADING_WEIGHT = 0.5   # a term in the section heading counts as half a body term
 TITLE_WEIGHT = 0.25    # a term in the document title counts for a quarter
@@ -63,6 +64,8 @@ class CorpusIndex:
         # Exact words of the title, used only for a document's owner/version line.
         self.title_words: list[frozenset[str]] = []
         self.quantity: list[bool] = [has_quantity(c.text) for c in chunks]
+        self.measure: list[bool] = [has_measure(c.text) for c in chunks]
+        self.negative: list[bool] = [states_negative(c.text) for c in chunks]
         self.length: list[float] = []
         df: Counter = Counter()
         for c in chunks:
@@ -95,9 +98,10 @@ class CorpusIndex:
         """How much a question term matters. Rare terms matter more; a term that
         appears nowhere in the documents matters most. A term reached through a
         synonym is weighed by the commonest wording that is actually present."""
-        if term.frame:
+        if term.frame or term.negation:
             return self.max_idf * FRAME_WEIGHT
-        present = [self.idf(s) for s in term.matches if self.df.get(s, 0) > 0]
+        stems = term.matches | {term.opposite} if term.opposite else term.matches
+        present = [self.idf(s) for s in stems if self.df.get(s, 0) > 0]
         return min(present) if present else self.max_idf * self.absent_term_weight
 
     def covers(self, term: QueryTerm, chunk_pos: int) -> bool:
@@ -106,15 +110,26 @@ class CorpusIndex:
     def credit(self, term: QueryTerm, chunk_pos: int) -> float:
         """How well a passage matches one question term: 1 in the passage text, 0.5 in
         its section heading only, 0.25 in the document title only, else 0."""
-        if term.frame and self.quantity[chunk_pos]:
+        if term.negation:
+            return 1.0 if self.negative[chunk_pos] else 0.0
+        if term.frame and self.frame_answered(term, chunk_pos):
             return 1.0
         if term.matches & self.body[chunk_pos]:
+            return 1.0
+        if self.opposite_matches(term, chunk_pos) and self.negative[chunk_pos]:
             return 1.0
         if term.matches & self.heading[chunk_pos]:
             return HEADING_WEIGHT
         if term.matches & self.title[chunk_pos]:
             return TITLE_WEIGHT
         return 0.0
+
+    def frame_answered(self, term: QueryTerm, chunk_pos: int) -> bool:
+        """Does the passage contain the kind of quantity a "how long/many" term asks for?"""
+        return (self.measure if term.word.lower() in MEASURE_FRAME else self.quantity)[chunk_pos]
+
+    def opposite_matches(self, term: QueryTerm, chunk_pos: int) -> bool:
+        return bool(term.opposite) and term.opposite in self.body[chunk_pos]
 
     def coverage(self, terms: list[QueryTerm], chunk_pos: int) -> Coverage:
         """Share of the question, weighted by term importance, found in a passage."""
@@ -138,6 +153,12 @@ class CorpusIndex:
             (matched if c > 0 else missing).append(t.word or t.stem)
             # A required word must be in the passage or its heading; the title is not enough.
             if t.required and c < HEADING_WEIGHT:
+                required_missing.append(t.word or t.stem)
+            # "How long ...?" cannot be answered by a passage that states no quantity.
+            elif t.frame and c == 0:
+                required_missing.append(t.word or t.stem)
+            # "unapproved" asked, "approved" stated: the passage says the opposite.
+            elif c == 0 and self.opposite_matches(t, chunk_pos):
                 required_missing.append(t.word or t.stem)
         return Coverage(got / total if total else 0.0, matched, missing, required_missing)
 

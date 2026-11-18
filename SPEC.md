@@ -92,6 +92,11 @@ its job commit together.
      the opener is required: a passage without it (in text or heading) is rejected.
    - For two content words that are adjacent in the question, a passage that has the
      first but not the second gets half credit for the first.
+   - A "how long/often/quickly" question is rejected unless the passage has a number
+     with a unit or a frequency word; a bare number is enough only for "how many/much".
+   - A negative question (not, no, never, without) requires a passage that states a
+     negative or an exception. An "un..." word matches its positive form only in such
+     a passage; against a positive passage it is a contradiction and is rejected.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
    passage it cites, be at least 20 characters or the whole passage, and that passage

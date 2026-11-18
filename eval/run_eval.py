@@ -65,7 +65,9 @@ def judge(case: dict, result: dict) -> str:
         return "false answer"
     src = result["sources"][0]
     wanted = case["contains"] if isinstance(case["contains"], list) else [case["contains"]]
-    ok = src["filename"] == case["file"] and any(w.lower() in src["passage"].lower() for w in wanted)
+    # Graded on the quote that is displayed, not on the whole passage around it.
+    shown = src.get("quote") or src["passage"]
+    ok = src["filename"] == case["file"] and any(w.lower() in shown.lower() for w in wanted)
     return "correct" if ok else "wrong passage"
 
 

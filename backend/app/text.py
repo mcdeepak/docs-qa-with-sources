@@ -5,7 +5,7 @@ drop stop words, stem. A small synonym table bridges common wording differences
 between how people ask and how policies are written ("kept" vs "retained").
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
 
@@ -31,12 +31,26 @@ anybody everyone
 # or a frequency word. See has_quantity below.
 HOW_FRAME = frozenset(
     "long often quickly soon fast far big old late early many much frequently".split())
+# These ask for a duration, a length or a frequency. A bare number such as the 7 in
+# "vault 7" does not answer them: the number must come with a unit ("35 days").
+MEASURE_FRAME = frozenset("long often quickly soon fast late early frequently".split())
 FRAME_WEIGHT = 0.3
 
-_QUANTITY = re.compile(
-    r"\d|\b(?:every|each|once|twice|daily|nightly|weekly|fortnightly|monthly|quarterly|"
-    r"annually|yearly|immediately|always|never|one|two|three|four|five|six|seven|eight|"
-    r"nine|ten)\b", re.I)
+_FREQUENCY = (r"every|each|once|twice|daily|nightly|weekly|fortnightly|monthly|quarterly|"
+              r"annually|yearly|immediately|always|never")
+_NUMBER_WORD = r"one|two|three|four|five|six|seven|eight|nine|ten"
+_QUANTITY = re.compile(rf"\d|\b(?:{_FREQUENCY}|{_NUMBER_WORD})\b", re.I)
+# A number followed by a unit word, a percentage, an amount of money, or a frequency word.
+_MEASURE = re.compile(
+    rf"(?<![A-Za-z\d.])\d+(?:[.,]\d+)*\s*(?:%|-?\s*[A-Za-z]{{2,}})|[$\u00a3\u20ac]\s*\d|"
+    rf"\b(?:{_FREQUENCY})\b|\b(?:{_NUMBER_WORD})\s+[A-Za-z]{{2,}}", re.I)
+
+# Words that make a question negative ("when is MFA not required?") and words that make
+# a passage state a negative, an exception or a ban.
+_ASKS_NEGATIVE = re.compile(r"\b(?:not|no|never|without|cannot)\b|n['\u2019]t\b", re.I)
+_STATES_NEGATIVE = re.compile(
+    r"\b(?:not|no|never|without|cannot|neither|nor|except\w*|unless|exempt\w*|prohibit\w*|"
+    r"forbidden)\b|n['\u2019]t\b", re.I)
 
 # Irregular forms the stemmer does not connect.
 IRREGULAR = {
@@ -61,6 +75,18 @@ _ALIAS = re.compile(r"\b(?:" + "|".join(re.escape(a) for a in ALIASES) + r")\b")
 
 def has_quantity(text: str) -> bool:
     return bool(_QUANTITY.search(text))
+
+
+def has_measure(text: str) -> bool:
+    return bool(_MEASURE.search(text))
+
+
+def asks_negative(question: str) -> bool:
+    return bool(_ASKS_NEGATIVE.search(question))
+
+
+def states_negative(text: str) -> bool:
+    return bool(_STATES_NEGATIVE.search(text))
 
 
 @lru_cache(maxsize=50_000)
@@ -141,6 +167,16 @@ class QueryTerm:
     # True when the next term follows this one directly in the question, as in
     # "probation period". Used to check that a passage has the phrase, not just a part.
     joined_to_next: bool = False
+    # For an "un..." word, the stem without the prefix ("unapproved" -> "approv"). A
+    # passage matches through it only if the passage is itself negative ("not approved").
+    opposite: str = ""
+    # Stands for the "not" in a negative question. Only a passage that states a
+    # negative or an exception satisfies it.
+    negation: bool = False
+
+    def answered_by(self, text: str) -> bool:
+        """For a frame term: does this text contain the kind of quantity asked for?"""
+        return has_measure(text) if self.word.lower() in MEASURE_FRAME else has_quantity(text)
 
 
 _HOW_AUX = frozenset("do does did can could should would must may".split())
@@ -174,17 +210,19 @@ def query_terms(question: str) -> list[QueryTerm]:
             continue
         seen.add(s)
         matches = {s}
-        if len(s) >= 6 and s.startswith("un"):
-            matches.add(s[2:])                       # "uncollected" also matches "collected"
+        # "uncollected" can be answered by "not collected", never by "collected" alone.
+        opposite = s[2:] if len(s) >= 6 and s.startswith("un") else ""
         if settings.use_synonyms:
             matches |= _synonym_groups().get(s, frozenset())
-        found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches),
-                                   frame=frame, required=(i == required_at and not frame))))
+        found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches), frame=frame,
+                                   required=(i == required_at and not frame), opposite=opposite)))
     terms = []
     for n, (i, term) in enumerate(found):
         nxt = found[n + 1] if n + 1 < len(found) else None
         joined = bool(nxt and nxt[0] == i + 1 and not term.frame and not nxt[1].frame)
-        terms.append(QueryTerm(term.stem, term.word, term.matches, term.frame, term.required, joined))
+        terms.append(replace(term, joined_to_next=joined))
+    if terms and asks_negative(question):
+        terms.append(QueryTerm(stem="not", word="not", negation=True, required=True))
     return terms
 
 

@@ -29,7 +29,8 @@ weighed by how rare it is in the indexed documents, and the best passage must co
 55% of the total. A word that appears in no document counts double, and a word found
 only in a heading or title counts for less than one found in the passage. For "who
 approves..." and "how do I book..." questions the passage must contain the action word
-itself. Second, quotes: the answerer must return the text it used, and the code
+itself. A negative question ("when is MFA not required?") needs a passage that states
+a negative or an exception, and "how long" needs a number with a unit. Second, quotes: the answerer must return the text it used, and the code
 confirms that text is in the stored passage word for word. Third, wording: a
 model-written answer that contains a number its quotes do not is replaced by the quote.
 I chose coverage over a raw search score because scores are not comparable between
@@ -91,14 +92,30 @@ What I take from this:
   read as clause 1.5. I wrote the fresh questions before fixing anything, so I could
   measure the change. Wrong answers on the fresh split went from 3 to 0 and on the test
   split from 2 to 0.
+- A third round came from a review by a different AI model (ChatGPT), which I gave the
+  repository and asked for inputs that would break it. I reproduced each of its cases
+  on a throwaway copy before changing anything. Six were real wrong answers with a
+  green verdict: "When is MFA not required?" answered with the rule that it is
+  required; "unapproved vendors" answered from "approved vendors"; "how long are
+  backups kept?" answered with "kept in vault 7"; a long paragraph where the sentence
+  shown left out the "35 days"; a table cell containing an escaped pipe; and a code
+  example cited instead of the rule beside it. All six are fixed with regression
+  tests. It also showed that my evaluation graded the whole passage rather than the
+  sentence displayed. It now grades the displayed quote, and the figures did not
+  change. Its top finding, that the system fails without internet at first start, I
+  did not act on: the brief says reviewers use the internet access they already have.
 - The honest figure for wording the system has not seen is the fresh split: 11 of 14
   answered, and that did not move with the fixes. The 3 it declined are wording gaps
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
   wrong refusal across all splits, the right passage was still shown under "closest
   passages".
-- No wrong answers on 98 questions does not mean none are possible. The rules are
-  still about words, not meaning. A passage that contains every important word of a
-  question while being about something else will still be accepted. Three of the fresh
+- No wrong answers on 98 questions does not mean none are possible, and the third
+  review proved it by finding six. The rules are still about words, not meaning. A
+  passage that contains every important word of a question while being about
+  something else will still be accepted: with "Payroll approves invoices. Facilities
+  handles badge requests." the question "Does Payroll approve badge requests?" is
+  answered with that passage. When two documents disagree (35 days in one, 90 in
+  another) one is shown as the answer and the other only as a related passage. Three of the fresh
   unanswerable questions were the reviewer's own examples, so that split is not fully
   blind either. All questions and 15 of the documents were written for this
   assignment, so they share my blind spots.
@@ -115,6 +132,11 @@ What I take from this:
 - **Tables and columns in PDFs.** Markdown tables are handled row by row. PDF tables
   are read as lines of text, which works for simple ones only, and a two-column page
   layout is read across both columns and comes out scrambled.
+- **Code blocks.** Text inside a fenced code block in Markdown is not indexed, so a
+  configuration example cannot be cited as policy. A procedure whose only statement
+  of a step is inside a code block will not be found.
+- **Numbers in words.** "14 days" in a question does not match "fourteen days" in a
+  document.
 - **Re-indexing after a rule change.** Documents keep the passages they were split into
   when uploaded. If the extraction rules change, a document has to be removed and
   uploaded again to pick them up.
@@ -151,13 +173,18 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 57 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 66 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
 Before submitting I had a second AI session review the finished code with no knowledge
 of how it was built. It found real defects that the first had missed, including the
 document-name loophole described above. The fixes went in as separate pull requests,
 each with a regression test.
+
+Last, I gave the repository to ChatGPT and asked it to find inputs that would break
+it. I had Claude reproduce every case before accepting it: some were real and were
+fixed, some were already handled, and one finding contradicted the brief. That round
+is described under "What the evaluation showed".
 
 The evaluation is where this mattered most. The first version looked right on the
 eight sample questions and scored 73% on the wider set, with 8 confident mistakes.

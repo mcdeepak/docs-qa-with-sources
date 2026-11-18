@@ -24,6 +24,11 @@ make eval-live   # same questions through the running API, with latency
 | Unanswerable | declined | Correct. |
 | Unanswerable | false answer | Answered something the documents do not say. Harmful. |
 
+A question counts as correct only if the expected text is in the **quote that is
+displayed**, from the expected file. Until the last review round it was checked
+against the whole passage around the quote, which could pass an answer whose
+displayed sentence left the fact out. Tightening it did not change any result.
+
 ## Release gates
 
 `run_eval.py` exits with an error, and CI fails, if any of these is missed:
