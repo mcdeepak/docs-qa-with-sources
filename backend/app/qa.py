@@ -7,7 +7,7 @@ from .answering import get_answerer
 from .config import settings
 from .retrieval import get_retriever
 from .support import ScoredHit, check_quotes, grounded, passing, score_hits
-from .text import query_terms
+from .text import HOW_FRAME, query_terms
 
 NOT_SUPPORTED = "The indexed documents do not contain an answer to this question."
 
@@ -90,6 +90,12 @@ def ask(question: str, index=None, retriever=None, answerer=None, threshold=None
         best = scored[0] if scored else None
         if best and best.coverage >= threshold and best.required_missing:
             word = best.required_missing[0]
+            if word in HOW_FRAME:
+                return done("The closest passage does not state the duration, amount or "
+                            "frequency the question asks for.")
+            if word == "not":
+                return done("The closest passage states a rule, but not the exception or "
+                            "negative the question asks about.")
             return done(f"No passage says anything about \u201c{word}\u201d, which the question asks about.")
         return done("No passage covers enough of the question.")
 

@@ -27,7 +27,7 @@
 - {split: dev, q: "How quickly are accounts disabled when someone leaves?", file: access-control-policy.md, contains: "within 4 hours"}
 - {split: dev, q: "When does the Change Advisory Board meet?", file: change-management-procedure.md, contains: "every Tuesday"}
 - {split: dev, q: "Who approves an emergency change?", file: change-management-procedure.md, contains: "On-call manager"}
-- {split: dev, q: "What is the recovery time objective for Tier 1 systems?", file: backup-and-recovery-standard.md, contains: "Tier 1"}
+- {split: dev, q: "What is the recovery time objective for Tier 1 systems?", file: backup-and-recovery-standard.md, contains: "Recovery time objective: 4 hours"}
 - {split: dev, q: "How often are production databases backed up?", file: backup-and-recovery-standard.md, contains: "every 4 hours"}
 - {split: dev, q: "Do visitors need to be escorted?", file: visitor-and-office-access-policy.md, contains: "escorted"}
 - {split: dev, q: "What is the maximum email attachment size?", file: email-and-messaging-policy.md, contains: "25 MB"}
@@ -53,7 +53,7 @@
 - {split: test, q: "How often is administrator access reviewed?", file: access-control-policy.md, contains: "every month"}
 - {split: test, q: "When is the production change freeze?", file: change-management-procedure.md, contains: "15 December"}
 - {split: test, q: "What lead time does a normal change need?", file: change-management-procedure.md, contains: "5 business days"}
-- {split: test, q: "What is the recovery point objective for the finance system?", file: backup-and-recovery-standard.md, contains: "Tier 2"}
+- {split: test, q: "What is the recovery point objective for the finance system?", file: backup-and-recovery-standard.md, contains: "Recovery point objective: 4 hours"}
 - {split: test, q: "How often do we test restores?", file: backup-and-recovery-standard.md, contains: "every quarter"}
 - {split: test, q: "Does MIT licensed code need legal approval?", file: software-and-licensing-policy.md, contains: "do not need approval"}
 - {split: test, q: "What should I do if I lose my access card?", file: visitor-and-office-access-policy.md, contains: "within 24 hours"}

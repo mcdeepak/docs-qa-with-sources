@@ -123,3 +123,13 @@ def test_utf16_markdown_is_decoded_and_never_contains_nul():
     doc = extract(data, "kettle.md")
     assert doc.passages[0].text == "Kettles must be descaled every 6 weeks."
     assert all("\x00" not in p.text for p in doc.passages)
+
+
+def test_an_escaped_pipe_stays_inside_its_table_cell():
+    doc = md("| System | Limit |\n|---|---|\n| Finance \\| Payroll | 30 days |\n")
+    assert [p.text for p in doc.passages] == ["System: Finance | Payroll | Limit: 30 days"]
+
+
+def test_fenced_code_blocks_are_not_indexed():
+    doc = md("# Example\n```\nALLOW_PUBLIC_EXPORT = true\n```\nPublic export is prohibited.\n")
+    assert [p.text for p in doc.passages] == ["Public export is prohibited."]

@@ -216,3 +216,52 @@ def test_questions_about_a_document_owner_and_version_use_its_header_line(sample
     version = ask(sample_index, "What version is the remote work and VPN policy?")
     assert version["supported"] is True and "3.0" in version["answer"]
     assert version["sources"][0]["filename"] == "remote-work-and-vpn-policy.pdf"
+
+
+# ---------------------------------------------------------------- regressions from the external review
+
+def one_document(text: str, name: str = "a.md"):
+    """An index holding a single small Markdown document."""
+    from app.extract import extract
+    from app.index import Chunk, CorpusIndex
+
+    ex = extract(text.encode(), name)
+    return CorpusIndex([Chunk(i + 1, 1, name, ex.title, ex.doc_version, ex.doc_owner, 1, "", i,
+                              p.kind, p.text, p.heading, p.page, p.clause, p.line)
+                        for i, p in enumerate(ex.passages)])
+
+
+def test_a_negative_question_is_not_answered_by_the_positive_rule():
+    index = one_document("MFA is required for payroll access.\n")
+    assert ask(index, "Is MFA required for payroll access?")["supported"] is True
+    declined = ask(index, "When is MFA not required?")
+    assert declined["supported"] is False
+    assert "exception or negative" in declined["reason"]
+
+
+def test_a_negative_question_is_answered_by_a_passage_that_states_the_negative():
+    index = one_document("MFA is not required for the guest wifi.\n")
+    assert ask(index, "When is MFA not required?")["supported"] is True
+
+
+def test_an_un_word_is_not_answered_by_its_opposite():
+    index = one_document("Approved vendors are eligible for reimbursement.\n")
+    assert ask(index, "Are unapproved vendors eligible for reimbursement?")["supported"] is False
+    # ...but "not collected" does answer "uncollected".
+    index = one_document("Print jobs that are not collected are kept for 12 hours.\n")
+    assert ask(index, "How long are uncollected print jobs kept?")["supported"] is True
+
+
+def test_how_long_needs_a_number_with_a_unit_not_just_any_number():
+    assert ask(one_document("Backups are kept in vault 7.\n"), "How long are backups kept?")["supported"] is False
+    assert ask(one_document("Backups are kept for 35 days.\n"), "How long are backups kept?")["supported"] is True
+    # "How many" is still answered by a bare number.
+    assert ask(one_document("The maximum number of guests is 5.\n"), "How many guests are allowed?")["supported"] is True
+
+
+def test_the_sentence_shown_for_a_quantity_question_states_the_quantity():
+    text = ("This section explains how long backups are kept. The retention period is 35 days."
+            + " This is background." * 16 + "\n")
+    result = ask(one_document(text), "How long are backups kept?")
+    assert result["supported"] is True
+    assert "35 days" in result["answer"] and "35 days" in result["sources"][0]["quote"]

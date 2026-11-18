@@ -114,7 +114,11 @@ def _clean_inline(text: str) -> str:
 
 
 def _cells(row: str) -> list[str]:
-    return [_clean_inline(c) for c in row.strip().strip("|").split("|")]
+    """Cells of a table row. A pipe written as "\\|" is part of the cell, not a divider."""
+    row = row.strip()
+    row = row[1:] if row.startswith("|") else row
+    row = row[:-1] if row.endswith("|") and not row.endswith("\\|") else row
+    return [_clean_inline(c.replace("\\|", "|")) for c in re.split(r"(?<!\\)\|", row)]
 
 
 _MD_RULE = re.compile(r"^\s*([-*_])\s*(?:\1\s*){2,}$")          # --- *** ___
@@ -164,9 +168,8 @@ def extract_markdown(data: bytes, filename: str) -> Extracted:
             in_code = not in_code
             i += 1
             continue
+        # A fenced code block is an example, not a statement of policy, so it is not indexed.
         if in_code or not line.strip():
-            if in_code and line.strip():
-                add("paragraph", line, i + 1)
             i += 1
             continue
 

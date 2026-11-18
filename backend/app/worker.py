@@ -66,7 +66,7 @@ def _set_stage(version_id: int, stage: str) -> None:
     with db.pool().connection() as conn:
         updated = conn.execute(
             "UPDATE document_versions SET status = %s, error = NULL "
-            "WHERE id = %s AND status <> 'superseded'", (stage, version_id)).rowcount
+            "WHERE id = %s AND status NOT IN ('superseded', 'ready')", (stage, version_id)).rowcount
     if not updated:
         raise Superseded()
     if settings.index_delay_seconds:
@@ -136,18 +136,24 @@ def _finish(job_id: int, state: str, error: str | None = None, retry_in: float =
             (state, error, retry_in, job_id))
 
 
-def _fail_version(version_id: int, error: str) -> None:
+def _fail_version(version_id: int, error: str) -> bool:
+    """Marks a version failed. A version that is already ready (an earlier run of the
+    job finished) or superseded is left alone; returns False in that case."""
     with db.pool().connection() as conn:
-        conn.execute("UPDATE document_versions SET status = 'failed', error = %s "
-                     "WHERE id = %s AND status <> 'superseded'", (error, version_id))
+        return bool(conn.execute(
+            "UPDATE document_versions SET status = 'failed', error = %s "
+            "WHERE id = %s AND status NOT IN ('superseded', 'ready')", (error, version_id)).rowcount)
 
 
 def run_job(job: dict) -> None:
     job_id, version_id, attempts = job["id"], job["version_id"], job["attempts"]
     if attempts > settings.max_attempts:
         # The worker died on this job every time it tried. Stop retrying.
-        _fail_version(version_id, "Indexing was abandoned after repeated worker crashes.")
-        _finish(job_id, "failed", "attempts exhausted")
+        if _fail_version(version_id, "Indexing was abandoned after repeated worker crashes."):
+            _finish(job_id, "failed", "attempts exhausted")
+        else:
+            # The last attempt did finish; the worker died before recording it.
+            _finish(job_id, "done", "already finished")
         return
 
     stop = threading.Event()
