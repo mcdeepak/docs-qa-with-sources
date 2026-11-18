@@ -265,3 +265,13 @@ def test_the_sentence_shown_for_a_quantity_question_states_the_quantity():
     result = ask(one_document(text), "How long are backups kept?")
     assert result["supported"] is True
     assert "35 days" in result["answer"] and "35 days" in result["sources"][0]["quote"]
+
+
+def test_a_negative_question_needs_the_negated_word_in_the_passage(sample_index):
+    """Regression: with the sample documents, "When is MFA not required?" was answered
+    with "SMS codes are not an approved MFA method", a negative passage about MFA that
+    says nothing about when it is not required."""
+    assert ask(sample_index, "When is MFA not required?")["supported"] is False
+    # A negative question the documents do answer is still answered.
+    index = one_document("MFA is not required for the guest wifi.\n")
+    assert ask(index, "When isn't MFA required?")["supported"] is True
