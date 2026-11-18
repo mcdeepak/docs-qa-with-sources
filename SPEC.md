@@ -94,8 +94,8 @@ its job commit together.
      first but not the second gets half credit for the first.
    - A "how long/often/quickly" question is rejected unless the passage has a number
      with a unit or a frequency word; a bare number is enough only for "how many/much".
-   - A negative question (not, no, never, without) requires a passage that states a
-     negative or an exception. An "un..." word matches its positive form only in such
+   - A negative question (not, no, never, without, n't) requires a passage that states a
+     negative or an exception and contains the first content word after the "not". An "un..." word matches its positive form only in such
      a passage; against a positive passage it is a contradiction and is rejected.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored

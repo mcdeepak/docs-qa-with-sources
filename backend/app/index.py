@@ -98,7 +98,9 @@ class CorpusIndex:
         """How much a question term matters. Rare terms matter more; a term that
         appears nowhere in the documents matters most. A term reached through a
         synonym is weighed by the commonest wording that is actually present."""
-        if term.frame or term.negation:
+        if term.negation:
+            return 0.0      # the "not" of a question is a condition, it earns no coverage
+        if term.frame:
             return self.max_idf * FRAME_WEIGHT
         stems = term.matches | {term.opposite} if term.opposite else term.matches
         present = [self.idf(s) for s in stems if self.df.get(s, 0) > 0]

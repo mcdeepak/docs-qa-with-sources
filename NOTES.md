@@ -173,7 +173,7 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 66 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 67 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
 Before submitting I had a second AI session review the finished code with no knowledge

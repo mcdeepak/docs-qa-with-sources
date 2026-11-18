@@ -54,7 +54,8 @@ No model takes part in this decision.
    - For a phrase such as "probation period", a passage with "probation" but not
      "period" gets half credit for it, because it is probably about something else.
    - A negative question ("When is MFA not required?") is only answered by a passage
-     that itself states a negative or an exception. "Unapproved" is matched by "not
+     that itself states a negative or an exception and contains the negated word
+     ("required"). "Unapproved" is matched by "not
      approved", never by "approved" alone.
    - "How long...?" needs a number with a unit ("35 days"). A bare number such as the
      7 in "vault 7" does not answer it, and the sentence shown is the one that states
@@ -180,7 +181,7 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 66 unit and integration tests
+make test        # 67 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency

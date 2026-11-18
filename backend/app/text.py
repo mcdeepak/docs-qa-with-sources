@@ -120,7 +120,11 @@ def display(word: str) -> str:
 def words(text: str) -> list[str]:
     """Lowercased word tokens. Hyphens and apostrophes split words."""
     text = _keep_acronyms(text).lower().replace("’", "'")
-    text = re.sub(r"'s\b", "", text)
+    # "can't" and "isn't" are read as "can not" and "is not".
+    text = re.sub(r"\bcan't\b", "can not", text)
+    text = re.sub(r"\bwon't\b", "will not", text)
+    text = re.sub(r"n't\b", " not", text)
+    text = re.sub(r"'(?:s|m|re|ve|ll|d)\b", "", text)    # what's, I'm, we're, I've, I'll, I'd
     text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)   # 10,000 -> 10000
     text = _ALIAS.sub(lambda m: ALIASES[m.group(0)], text)
     return [IRREGULAR.get(w, w) for w in _WORD.findall(text)]
@@ -196,9 +200,24 @@ def _required_position(tokens: list[str]) -> int | None:
     return None
 
 
+_NEGATORS = frozenset("not no never without cannot".split())
+
+
+def _negated_position(tokens: list[str]) -> int | None:
+    """Position of the word a negative question negates: the first content word after
+    "not" ("when is MFA not required?" turns on "required")."""
+    for i, w in enumerate(tokens):
+        if w in _NEGATORS:
+            for j in range(i + 1, len(tokens)):
+                if not is_stop(tokens[j]):
+                    return j
+            return None
+    return None
+
+
 def query_terms(question: str) -> list[QueryTerm]:
     tokens = words(question)
-    required_at = _required_position(tokens)
+    required_at = {_required_position(tokens), _negated_position(tokens)}
     found: list[tuple[int, QueryTerm]] = []
     seen: set[str] = set()
     for i, w in enumerate(tokens):
@@ -215,7 +234,7 @@ def query_terms(question: str) -> list[QueryTerm]:
         if settings.use_synonyms:
             matches |= _synonym_groups().get(s, frozenset())
         found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches), frame=frame,
-                                   required=(i == required_at and not frame), opposite=opposite)))
+                                   required=(i in required_at and not frame), opposite=opposite)))
     terms = []
     for n, (i, term) in enumerate(found):
         nxt = found[n + 1] if n + 1 < len(found) else None
