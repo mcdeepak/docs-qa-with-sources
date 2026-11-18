@@ -290,3 +290,26 @@ def test_a_question_with_one_ordinary_word_is_declined_as_too_general(sample_ind
     assert ask(sample_index, "What is MFA?")["supported"] is True
     # ...or when the question also asks for a quantity.
     assert ask(sample_index, "How long must a password be?")["supported"] is True
+
+
+def test_a_passage_with_only_one_of_the_things_asked_about_is_not_enough(sample_index):
+    """Regression: "Do passwords expire?" was answered from a passage about leave days
+    expiring, because "expire" is rare and "password" is common."""
+    from app.extract import extract
+    from app.index import Chunk, CorpusIndex
+
+    extra = extract(b"# Leave\n\nCarried-over days expire on 31 March.\n", "leave.md")
+    chunks = list(sample_index.chunks) + [
+        Chunk(9000 + i, 99, "leave.md", extra.title, None, None, 1, "", i, p.kind, p.text, p.heading,
+              p.page, p.clause, p.line) for i, p in enumerate(extra.passages)]
+    result = ask(CorpusIndex(chunks), "Do passwords expire?")
+    assert not (result["supported"] and result["sources"][0]["filename"] == "leave.md")
+
+
+def test_a_number_in_the_question_does_not_pick_the_passage(sample_index):
+    """Regression: "Are backups kept for 90 days?" cited a passage about deleted accounts
+    because it contained "90 days". The backups passage is the evidence."""
+    result = ask(sample_index, "Are backups kept for 90 days?")
+    assert result["supported"] is True and "35 days" in result["answer"]
+    for noise in ["1 2 3", "how many days", "{{7*7}} ${7*7}"]:
+        assert ask(sample_index, noise)["supported"] is False, noise

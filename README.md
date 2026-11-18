@@ -60,6 +60,10 @@ No model takes part in this decision.
    - A question with only one topic word ("How was your day?", "help") is declined as
      too general, unless the word is an acronym or code as typed ("MFA", "P1") or the
      question also asks for a quantity.
+   - A passage must contain at least two of the things a question asks about. "Do
+     passwords expire?" is not answered by a passage about leave days expiring.
+   - A number in the question ("kept for 90 days?") counts for little, so a passage is
+     not chosen just because it has the same number.
    - "How long...?" needs a number with a unit ("35 days"). A bare number such as the
      7 in "vault 7" does not answer it, and the sentence shown is the one that states
      the quantity.
@@ -184,7 +188,7 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 68 unit and integration tests
+make test        # 70 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency

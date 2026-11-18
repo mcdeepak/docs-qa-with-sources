@@ -99,6 +99,11 @@ its job commit together.
      a passage; against a positive passage it is a contradiction and is rejected.
    - A question with exactly one topic word and no quantity word is declined as too
      general, unless that word is typed as an acronym or contains a digit.
+   - When the question has two or more topic words, a passage with fewer than two of
+     them (in its text or heading) is rejected. Numbers and units of time are not topic
+     words; a number weighs the same as a quantity word.
+   - The required word of a "who <verb>" question matches only itself or a form of the
+     same word, not looser synonyms.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
    passage it cites, be at least 20 characters or the whole passage, and that passage

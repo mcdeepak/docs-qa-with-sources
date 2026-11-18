@@ -65,8 +65,10 @@ def _too_general(question: str, terms) -> str | None:
     happens to contain it would look like a full match. One word is enough only when
     it is an acronym or a code as typed ("MFA", "P1"), or when the question also asks
     for a quantity ("How long must a password be?"). Otherwise returns that word."""
-    topic = [t for t in terms if not t.frame and not t.negation]
-    if len(topic) != 1 or len(topic) != len(terms):
+    topic = [t for t in terms if t.topic]
+    if not topic:
+        return terms[0].word                 # only numbers and units: "how many days", "1 2 3"
+    if len(topic) > 1 or any(t.frame for t in terms):
         return None
     word = topic[0].word
     typed = re.findall(rf"\b{re.escape(word)}\b", question, re.I)

@@ -100,6 +100,11 @@ class CorpusIndex:
         synonym is weighed by the commonest wording that is actually present."""
         if term.negation:
             return 0.0      # the "not" of a question is a condition, it earns no coverage
+        if term.stem.isdigit():
+            # A number in a question ("kept for 90 days?") is a detail, not a topic. Numbers
+            # are rare, so at full weight any passage with the same number looks like a
+            # match. It counts like a quantity word instead.
+            return self.max_idf * FRAME_WEIGHT
         if term.frame:
             return self.max_idf * FRAME_WEIGHT
         stems = term.matches | {term.opposite} if term.opposite else term.matches
@@ -162,6 +167,13 @@ class CorpusIndex:
             # "unapproved" asked, "approved" stated: the passage says the opposite.
             elif c == 0 and self.opposite_matches(t, chunk_pos):
                 required_missing.append(t.word or t.stem)
+        # A question about two or more things cannot be answered by a passage that has
+        # only one of them ("Do passwords expire?" against "Carried-over days expire").
+        topic = [(t, c) for t, c in zip(terms, credits) if t.topic]
+        absent = [t for t, c in topic if c < HEADING_WEIGHT]
+        if len(topic) >= 2 and len(topic) - len(absent) < 2 and not required_missing:
+            heaviest = max(absent, key=self.term_weight)
+            required_missing.append(heaviest.word or heaviest.stem)
         return Coverage(got / total if total else 0.0, matched, missing, required_missing)
 
 
