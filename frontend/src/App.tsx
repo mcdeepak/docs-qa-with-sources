@@ -59,7 +59,11 @@ export function App() {
           </button>
         </nav>
         <div className="topbar-right">
-          <span className="engine" title="Retrieval and answering methods in use">{me.retriever} + {me.answerer}</span>
+          <span className="engine" title={`Retrieval: ${me.retriever}. Answering: ${me.answerer}.`}>
+            {me.retriever === "bm25" ? "Keyword search" : `${me.retriever} search`}
+            {" · "}
+            {me.answerer === "extractive" ? "no AI model" : "AI answers, checked in code"}
+          </span>
           <button className="link" onClick={() => api.logout().then(() => setMe(null))}>Sign out</button>
         </div>
       </header>
