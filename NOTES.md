@@ -104,6 +104,12 @@ What I take from this:
   sentence displayed. It now grades the displayed quote, and the figures did not
   change. Its top finding, that the system fails without internet at first start, I
   did not act on: the brief says reviewers use the internet access they already have.
+- Trying it by hand found one more. "How was your day?" was answered with "Backups
+  are retained for 35 days", because "day" was the only word left after the common
+  words were removed, and one matched word out of one is full coverage. A question
+  with a single topic word is now declined as too general unless that word is an
+  acronym or a code such as "MFA" or "P1". The cost is that "Tell me about backups"
+  is declined too.
 - The honest figure for wording the system has not seen is the fresh split: 11 of 14
   answered, and that did not move with the fixes. The 3 it declined are wording gaps
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
@@ -173,7 +179,7 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 67 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 68 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
 Before submitting I had a second AI session review the finished code with no knowledge

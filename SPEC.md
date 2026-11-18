@@ -97,6 +97,8 @@ its job commit together.
    - A negative question (not, no, never, without, n't) requires a passage that states a
      negative or an exception and contains the first content word after the "not". An "un..." word matches its positive form only in such
      a passage; against a positive passage it is a contradiction and is rejected.
+   - A question with exactly one topic word and no quantity word is declined as too
+     general, unless that word is typed as an acronym or contains a digit.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
    passage it cites, be at least 20 characters or the whole passage, and that passage
