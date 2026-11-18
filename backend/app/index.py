@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from . import db
 from .config import settings
 from .text import (FRAME_WEIGHT, MEASURE_FRAME, QueryTerm, analyse, has_measure, has_quantity,
-                   number_ranges, spans_overlap, states_negative, words)
+                   number_ranges, span_within, states_negative, words)
 
 HEADING_WEIGHT = 0.5   # a term in the section heading counts as half a body term
 TITLE_WEIGHT = 0.25    # a term in the document title counts for a quarter
@@ -128,7 +128,7 @@ class CorpusIndex:
         if term.matches & self.body[chunk_pos]:
             return 1.0
         # An amount that falls inside a range the passage states counts as found.
-        if any(spans_overlap(term.span, r) for r in self.ranges_in_unit(term, chunk_pos)):
+        if any(span_within(term.span, r) for r in self.ranges_in_unit(term, chunk_pos)):
             return 1.0
         if self.opposite_matches(term, chunk_pos) and self.negative[chunk_pos]:
             return 1.0
@@ -158,7 +158,7 @@ class CorpusIndex:
         # dollars belongs to "2,001 to 10,000 dollars" and not to "above 10,000 dollars".
         same_unit = self.ranges_in_unit(term, chunk_pos)
         if same_unit:
-            return any(spans_overlap(term.span, r) for r in same_unit)
+            return any(span_within(term.span, r) for r in same_unit)
         seq = self.sequence[chunk_pos]
         for i, word in enumerate(seq):
             if word != term.stem:

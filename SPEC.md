@@ -108,8 +108,8 @@ its job commit together.
      passage within two content words of the word that precedes or follows it in the
      question. Otherwise the passage is rejected. Where the passage states numeric
      ranges in the same unit ("2,001 to 10,000 dollars", "above 10,000 dollars"), the
-     ranges decide instead: the number, or the range the question states, must overlap
-     one of them.
+     ranges decide instead: the number, or the range the question states, must lie
+     inside one of them. A currency sign is read as the currency word.
    - A comparative (shorter, fewer, below, minimum...) is treated like an "un..." word:
      its opposite in a passage is a contradiction.
    - Candidate passages are ordered by coverage, then by retrieval score.

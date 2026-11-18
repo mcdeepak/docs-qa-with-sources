@@ -351,6 +351,24 @@ def test_an_amount_finds_the_range_it_falls_in(amount, approver):
     assert approver in result["answer"]
 
 
+def test_a_range_in_the_question_must_lie_inside_the_range_in_the_passage():
+    """Regression: "longer than 6 months" was answered by the rule for "longer than 12
+    months", which says nothing about a 7-month contract."""
+    purchases = one_document(PURCHASES)
+    assert ask(purchases, "Who reviews contracts longer than 6 months?")["supported"] is False
+    assert ask(purchases, "Who reviews contracts longer than 24 months?")["supported"] is True
+    assert ask(purchases, "Who reviews contracts longer than 12 months?")["supported"] is True
+
+
+@pytest.mark.parametrize("amount, approver", [
+    ("$2,000", "Line manager"), ("$2,001", "Department head"), ("$10,001", "Chief Financial Officer"),
+])
+def test_a_currency_sign_is_read_as_the_currency_word(amount, approver):
+    result = ask(one_document(PURCHASES), f"Who approves a {amount} purchase?")
+    assert result["supported"] is True, result["reason"]
+    assert approver in result["answer"]
+
+
 def test_a_range_in_the_question_is_matched_to_the_same_range():
     purchases = one_document(PURCHASES)
     assert "Chief Financial Officer" in ask(purchases, "Who approves purchases above 10,000 dollars?")["answer"]

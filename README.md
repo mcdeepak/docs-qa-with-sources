@@ -70,6 +70,8 @@ No model takes part in this decision.
    - Ranges are read as ranges. "5,000 dollars" finds the row "2,001 to 10,000
      dollars", and "10,001 dollars" finds "Above 10,000 dollars". This covers "up to",
      "under", "above", "at least", "X to Y" and similar, when the unit word matches.
+     "$5,000" is read as "5,000 dollars". A range in the question must lie inside the
+     passage's range: "longer than 6 months" is not answered by "longer than 12 months".
    - A comparative is not answered by its opposite: "shorter than 12 months" is not
      answered by a rule about "longer than 12 months".
    - "How long...?" needs a number with a unit ("35 days"). A bare number such as the
@@ -209,13 +211,13 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 81 unit and integration tests
+make test        # 85 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency
 ```
 
-The golden set is 106 questions over 20 documents (the 5 samples plus 15 written for
+The golden set is 108 questions over 20 documents (the 5 samples plus 15 written for
 this assignment, in `eval/corpus/`). It has four parts: a dev split used for tuning, a
 test split, a fresh split written after an independent review and before the fixes
 that followed it, and a review split of an outside reviewer's own cases. Results with
@@ -226,7 +228,7 @@ the default settings:
 | dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
 | test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
 | fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
-| review | 6 of 6 | 0 | 0 | 2 of 2 | 0 |
+| review | 7 of 7 | 0 | 0 | 3 of 3 | 0 |
 
 All 6 wrong refusals still showed the right passage under "closest passages".
 Latency through the API with 20 documents: median 0.9 ms, 95th percentile 1.1 ms,

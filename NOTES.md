@@ -67,7 +67,7 @@ cannot weaken the guarantee.
 
 ## What the evaluation showed
 
-106 questions over 20 documents, in four parts: a dev split I tuned on, a test split,
+108 questions over 20 documents, in four parts: a dev split I tuned on, a test split,
 a fresh split written after an independent review and before the fixes it led to, and
 a review split of an outside reviewer's own cases.
 
@@ -76,7 +76,7 @@ a review split of an outside reviewer's own cases.
 | dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
 | test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
 | fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
-| review | 6 of 6 | 0 | 0 | 2 of 2 | 0 |
+| review | 7 of 7 | 0 | 0 | 3 of 3 | 0 |
 
 Latency through the API at 20 documents: median 0.9 ms, 95th percentile 1.1 ms.
 
@@ -117,7 +117,7 @@ What I take from this:
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
   wrong refusal across all splits, the right passage was still shown under "closest
   passages".
-- No wrong answers on 106 questions does not mean none are possible, and that round
+- No wrong answers on 108 questions does not mean none are possible, and that round
   proved it. The rules are about words, not meaning. Three cases I know of and left:
   "How often are laptops backed up?" is answered with "File shares are backed up
   nightly"; "Does Payroll approve badge requests?" is answered from "Payroll approves
@@ -178,7 +178,7 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 81 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 85 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
 Before submitting I had the finished code reviewed again by AI, with no knowledge of
