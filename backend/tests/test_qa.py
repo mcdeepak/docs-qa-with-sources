@@ -313,3 +313,53 @@ def test_a_number_in_the_question_does_not_pick_the_passage(sample_index):
     assert result["supported"] is True and "35 days" in result["answer"]
     for noise in ["1 2 3", "how many days", "{{7*7}} ${7*7}"]:
         assert ask(sample_index, noise)["supported"] is False, noise
+
+
+TIERS = ("# Recovery\n\n| Tier | Example systems | Recovery time objective | Recovery point objective |\n"
+         "|---|---|---|---|\n| Tier 1 | Payments | 4 hours | 1 hour |\n| Tier 2 | Finance | 24 hours | 4 hours |\n"
+         "| Tier 3 | Intranet | 72 hours | 24 hours |\n")
+PURCHASES = ("# Purchases\n\n| Purchase value | Approver |\n|---|---|\n| Up to 2,000 dollars | Line manager |\n"
+             "| 2,001 to 10,000 dollars | Department head |\n| Above 10,000 dollars | Chief Financial Officer |\n\n"
+             "- Contracts longer than 12 months are reviewed by Legal.\n")
+
+
+def test_a_number_must_stand_beside_the_same_word_as_in_the_question():
+    """Regression: "Tier 4" was answered from the Tier 2 row because that row says
+    "4 hours", and "5,000 dollars" from the "Up to 2,000 dollars" row."""
+    tiers = one_document(TIERS)
+    assert ask(tiers, "What is the recovery time objective for Tier 4 systems?")["supported"] is False
+    assert "72 hours" in ask(tiers, "What is the recovery time objective for Tier 3 systems?")["answer"]
+
+    # A number with no range around it is matched as written.
+    plain = one_document("# Rooms\n\n- Room 12 seats 8 people.\n- Room 14 seats 20 people.\n")
+    assert ask(plain, "How many people does room 13 seat?")["supported"] is False
+    assert "20 people" in ask(plain, "How many people does room 14 seat?")["answer"]
+    # A yes/no question states a number to be checked, so the passage may differ.
+    assert ask(one_document("Backups are retained for 35 days.\n"), "Are backups retained for 90 days?")["supported"] is True
+
+
+@pytest.mark.parametrize("amount, approver", [
+    ("500", "Line manager"), ("2,000", "Line manager"),
+    ("2,001", "Department head"), ("5,000", "Department head"), ("exactly 10,000", "Department head"),
+    ("10,001", "Chief Financial Officer"), ("250,000", "Chief Financial Officer"),
+])
+def test_an_amount_finds_the_range_it_falls_in(amount, approver):
+    """Regression: "5,000 dollars" was answered from the "Up to 2,000 dollars" row. The
+    ranges in the rows are read as ranges, including both ends of each."""
+    result = ask(one_document(PURCHASES), f"Who approves purchases of {amount} dollars?")
+    assert result["supported"] is True, result["reason"]
+    assert approver in result["answer"]
+
+
+def test_a_range_in_the_question_is_matched_to_the_same_range():
+    purchases = one_document(PURCHASES)
+    assert "Chief Financial Officer" in ask(purchases, "Who approves purchases above 10,000 dollars?")["answer"]
+    # Euros are not dollars: with a different unit the ranges do not apply.
+    assert ask(purchases, "Who approves purchases of 5,000 euros?")["supported"] is False
+
+
+def test_a_comparative_is_not_answered_by_its_opposite():
+    """Regression: "shorter than 12 months" was answered with the rule for "longer than"."""
+    purchases = one_document(PURCHASES)
+    assert ask(purchases, "When are contracts shorter than 12 months reviewed by Legal?")["supported"] is False
+    assert ask(purchases, "When are contracts longer than 12 months reviewed by Legal?")["supported"] is True

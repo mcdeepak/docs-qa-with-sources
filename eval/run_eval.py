@@ -142,7 +142,7 @@ def right_passage_shown(case: dict, result: dict) -> bool:
 
 
 def report(rows, verbose: bool) -> bool:
-    for split in ("dev", "test", "fresh"):
+    for split in ("dev", "test", "fresh", "review"):
         print(line(split, summarise([r for r in rows if r[0]["split"] == split])))
     print(line("all", summarise(rows)))
     refusals = [r for r in rows if r[2] == "false refusal"]

@@ -104,6 +104,14 @@ its job commit together.
      words; a number weighs the same as a quantity word.
    - The required word of a "who <verb>" question matches only itself or a form of the
      same word, not looser synonyms.
+   - In a question that does not open with a yes/no word, a number must occur in the
+     passage within two content words of the word that precedes or follows it in the
+     question. Otherwise the passage is rejected. Where the passage states numeric
+     ranges in the same unit ("2,001 to 10,000 dollars", "above 10,000 dollars"), the
+     ranges decide instead: the number, or the range the question states, must overlap
+     one of them.
+   - A comparative (shorter, fewer, below, minimum...) is treated like an "un..." word:
+     its opposite in a passage is a contradiction.
    - Candidate passages are ordered by coverage, then by retrieval score.
 2. Quote gate: every quote must occur verbatim (whitespace-normalised) in the stored
    passage it cites, be at least 20 characters or the whole passage, and that passage

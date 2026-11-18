@@ -64,6 +64,14 @@ No model takes part in this decision.
      passwords expire?" is not answered by a passage about leave days expiring.
    - A number in the question ("kept for 90 days?") counts for little, so a passage is
      not chosen just because it has the same number.
+   - In a who/what/when question, a number must stand beside the same word in the
+     passage as in the question. "Tier 4" is not answered from a Tier 2 row that says
+     "4 hours".
+   - Ranges are read as ranges. "5,000 dollars" finds the row "2,001 to 10,000
+     dollars", and "10,001 dollars" finds "Above 10,000 dollars". This covers "up to",
+     "under", "above", "at least", "X to Y" and similar, when the unit word matches.
+   - A comparative is not answered by its opposite: "shorter than 12 months" is not
+     answered by a rule about "longer than 12 months".
    - "How long...?" needs a number with a unit ("35 days"). A bare number such as the
      7 in "vault 7" does not answer it, and the sentence shown is the one that states
      the quantity.
@@ -201,22 +209,24 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 70 unit and integration tests
+make test        # 81 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency
 ```
 
-The golden set is 98 questions over 20 documents (the 5 samples plus 15 written for
-this assignment, in `eval/corpus/`). It has three parts: a dev split used for tuning, a
-test split, and a fresh split written after an independent review and before the fixes
-that followed it. Results with the default settings:
+The golden set is 106 questions over 20 documents (the 5 samples plus 15 written for
+this assignment, in `eval/corpus/`). It has four parts: a dev split used for tuning, a
+test split, a fresh split written after an independent review and before the fixes
+that followed it, and a review split of an outside reviewer's own cases. Results with
+the default settings:
 
 | Split | Answerable: correct | Wrong passage | Declined wrongly | Unanswerable: declined | Answered wrongly |
 |---|---|---|---|---|---|
 | dev (tuned on) | 26 of 26 | 0 | 0 | 6 of 6 | 0 |
 | test | 27 of 30 | 0 | 3 | 10 of 10 | 0 |
 | fresh | 11 of 14 | 0 | 3 | 12 of 12 | 0 |
+| review | 6 of 6 | 0 | 0 | 2 of 2 | 0 |
 
 All 6 wrong refusals still showed the right passage under "closest passages".
 Latency through the API with 20 documents: median 0.9 ms, 95th percentile 1.1 ms,

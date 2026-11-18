@@ -48,3 +48,13 @@ def test_a_session_cookie_with_odd_characters_is_simply_invalid():
     from app import auth
     assert auth._valid_token("caf\u00e9|9999999999|sig") is False
     assert auth._valid_token("admin|not-a-number|sig") is False
+
+
+def test_an_empty_or_spaces_only_question_is_rejected(database):
+    with TestClient(app) as client:
+        for blank in ["", "   ", "\n\t"]:
+            assert client.post("/api/ask", json={"question": blank}, auth=AUTH).status_code == 422
+        assert client.post("/api/ask", json={"question": "x" * 501}, auth=AUTH).status_code == 422
+        # Spaces around a real question are ignored.
+        padded = client.post("/api/ask", json={"question": "  How long must a password be?  "}, auth=AUTH)
+        assert padded.status_code == 200 and padded.json()["question"] == "How long must a password be?"

@@ -8,7 +8,8 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, StringConstraints
+from typing_extensions import Annotated
 
 from . import auth, db, documents, qa
 from .answering import get_answerer
@@ -40,7 +41,8 @@ class Login(BaseModel):
 
 
 class Question(BaseModel):
-    question: str = Field(min_length=1, max_length=500)
+    # Surrounding spaces are removed first, so a question of only spaces is rejected (422).
+    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 @app.get("/api/health")
@@ -125,7 +127,7 @@ async def document_events(request: Request):
 
 @app.post("/api/ask", dependencies=protected)
 def ask(body: Question):
-    return qa.ask(body.question.strip())
+    return qa.ask(body.question)
 
 
 # The built UI. Any path that is not an API route or a file returns the app shell.

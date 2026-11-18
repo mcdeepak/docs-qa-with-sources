@@ -121,6 +121,9 @@ def ask(question: str, index=None, retriever=None, answerer=None, threshold=None
             if word in HOW_FRAME:
                 return done("The closest passage does not state the duration, amount or "
                             "frequency the question asks for.")
+            if word.isdigit():
+                return done(f"No passage covers \u201c{word}\u201d the way the question uses it: it is "
+                            "neither written there nor inside a range the passage states.")
             if word == "not":
                 return done("The closest passage states a rule, but not the exception or "
                             "negative the question asks about.")
