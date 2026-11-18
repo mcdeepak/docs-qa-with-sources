@@ -1,6 +1,6 @@
 # Evaluation
 
-- `golden.yaml`: 106 questions. Answerable ones name the file and a phrase the cited
+- `golden.yaml`: 108 questions. Answerable ones name the file and a phrase the cited
   passage must contain. Unanswerable ones must be declined. Each has a `split`.
 - `corpus/`: 15 fictional policy documents written for this assignment (12 Markdown,
   3 PDF). With the 5 supplied samples that makes the 20 documents the brief asks for.
@@ -35,7 +35,7 @@ displayed sentence left the fact out. Tightening it did not change any result.
 
 1. No harmful outcome on the dev split.
 2. At least 85% of answerable questions correct across all splits.
-3. At most 2 harmful outcomes across all 106 questions.
+3. At most 2 harmful outcomes across all 108 questions.
 
 ## The four splits
 
@@ -47,7 +47,7 @@ displayed sentence left the fact out. Tightening it did not change any result.
   fixes that followed. Three of its unanswerable questions are the reviewer's own
   examples of wrong answers; the other 23 were not known to fail or pass when written.
 
-- **review** (8 questions): four cases an outside reviewer reported after everything
+- **review** (10 questions): six cases an outside reviewer reported after everything
   above, plus four controls. Three of the four were answered wrongly when reported
   ("Tier 4" from a Tier 2 row, "5,000 dollars" from the "up to 2,000" row, "shorter
   than 12 months" from a "longer than" rule). "Tier 4" and "shorter than" are now

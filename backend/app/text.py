@@ -117,9 +117,18 @@ def display(word: str) -> str:
     return word
 
 
+_CURRENCY = {"$": "dollars", "\u00a3": "pounds", "\u20ac": "euros"}
+_MONEY = re.compile(r"([$\u00a3\u20ac])\s?(\d[\d,]*(?:\.\d+)?)")
+
+
+def _spell_out_money(text: str) -> str:
+    """"$5,000" is read as "5,000 dollars", so it matches a policy written either way."""
+    return _MONEY.sub(lambda m: f"{m.group(2)} {_CURRENCY[m.group(1)]}", text)
+
+
 def words(text: str) -> list[str]:
     """Lowercased word tokens. Hyphens and apostrophes split words."""
-    text = _keep_acronyms(text).lower().replace("’", "'")
+    text = _spell_out_money(_keep_acronyms(text)).lower().replace("’", "'")
     # "can't" and "isn't" are read as "can not" and "is not".
     text = re.sub(r"\bcan't\b", "can not", text)
     text = re.sub(r"\bwon't\b", "will not", text)
@@ -190,7 +199,7 @@ _RANGE_PATTERNS = [
 def number_ranges(text: str) -> list[tuple[Span, str]]:
     """The numeric ranges a text states, each with the stem of its unit word. A range
     with no unit word after it is ignored: without a unit it cannot be compared."""
-    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text.lower())
+    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", _spell_out_money(text).lower())
     found = []
     for pattern, kind in _RANGE_PATTERNS:
         for m in pattern.finditer(text):
@@ -211,9 +220,13 @@ def _holds(span: Span, x: float) -> bool:
     return (span[0] < x or (span[0] == x and span[2])) and (x < span[1] or (x == span[1] and span[3]))
 
 
-def spans_overlap(a: Span, b: Span) -> bool:
-    low, high = max(a[0], b[0]), min(a[1], b[1])
-    return low < high or (low == high and _holds(a, low) and _holds(b, low))
+def span_within(asked: Span, stated: Span) -> bool:
+    """Is everything the question asks about covered by the range the passage states?
+    "Longer than 24 months" is within "longer than 12 months". "Longer than 6 months"
+    is not: a 7-month contract is asked about and the rule says nothing on it."""
+    low_ok = stated[0] < asked[0] or (stated[0] == asked[0] and (stated[2] or not asked[2]))
+    high_ok = asked[1] < stated[1] or (asked[1] == stated[1] and (stated[3] or not asked[3]))
+    return low_ok and high_ok
 
 
 # Units of time say how much, not what about: "how many days" has no topic.
