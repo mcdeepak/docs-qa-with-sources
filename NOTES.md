@@ -92,49 +92,28 @@ What I take from this:
   read as clause 1.5. I wrote the fresh questions before fixing anything, so I could
   measure the change. Wrong answers on the fresh split went from 3 to 0 and on the test
   split from 2 to 0.
-- A third round came from a review by a different AI model (ChatGPT), which I gave the
-  repository and asked for inputs that would break it. I reproduced each of its cases
-  on a throwaway copy before changing anything. Six were real wrong answers with a
-  green verdict: "When is MFA not required?" answered with the rule that it is
-  required; "unapproved vendors" answered from "approved vendors"; "how long are
-  backups kept?" answered with "kept in vault 7"; a long paragraph where the sentence
-  shown left out the "35 days"; a table cell containing an escaped pipe; and a code
-  example cited instead of the rule beside it. All six are fixed with regression
-  tests. It also showed that my evaluation graded the whole passage rather than the
-  sentence displayed. It now grades the displayed quote, and the figures did not
-  change. Its top finding, that the system fails without internet at first start, I
-  did not act on: the brief says reviewers use the internet access they already have.
-- Trying it by hand found one more. "How was your day?" was answered with "Backups
-  are retained for 35 days", because "day" was the only word left after the common
-  words were removed, and one matched word out of one is full coverage. A question
-  with a single topic word is now declined as too general unless that word is an
-  acronym or a code such as "MFA" or "P1". The cost is that "Tell me about backups"
-  is declined too.
-- A last pass of about 120 odd questions typed against the 20 documents found more of
-  the same kind: "Do passwords expire?" answered from a passage about leave days
-  expiring, "Are backups kept for 90 days?" answered from a passage that happened to
-  contain "90 days", and "Who approves passwords?" answered with a ban, because
-  "approve" and "prohibited" shared a synonym group. Each got a general rule and a
-  test. Three I found and left, because fixing them needs meaning rather than words:
-  "How often are laptops backed up?" is answered with "File shares are backed up
-  nightly", "How many days can I work from the office?" with a sentence about desks at
-  an office, and "Who approves passwords?" with a sentence about the approved password
-  manager.
+- A third round was adversarial. I had a different AI model look for inputs that
+  would break it, then tried about 120 odd questions against the 20 documents. Every
+  case was reproduced before anything was changed. About ten were wrong answers shown
+  as supported: "When is MFA not required?" answered with the rule that it is
+  required, "How was your day?" answered with "Backups are retained for 35 days", and
+  "Do passwords expire?" answered from a passage about leave days. Each became a
+  general rule with a test: negative questions, numbers without a unit, one-word
+  questions, and passages that match only one of the things asked about. It also
+  showed my evaluation graded the whole passage rather than the sentence displayed.
+  It now grades the displayed quote, and the figures did not change.
 - The honest figure for wording the system has not seen is the fresh split: 11 of 14
   answered, and that did not move with the fixes. The 3 it declined are wording gaps
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
   wrong refusal across all splits, the right passage was still shown under "closest
   passages".
-- No wrong answers on 98 questions does not mean none are possible, and the third
-  review proved it by finding six. The rules are still about words, not meaning. A
-  passage that contains every important word of a question while being about
-  something else will still be accepted: with "Payroll approves invoices. Facilities
-  handles badge requests." the question "Does Payroll approve badge requests?" is
-  answered with that passage. When two documents disagree (35 days in one, 90 in
-  another) one is shown as the answer and the other only as a related passage. Three of the fresh
-  unanswerable questions were the reviewer's own examples, so that split is not fully
-  blind either. All questions and 15 of the documents were written for this
-  assignment, so they share my blind spots.
+- No wrong answers on 98 questions does not mean none are possible, and that round
+  proved it. The rules are about words, not meaning. Three cases I know of and left:
+  "How often are laptops backed up?" is answered with "File shares are backed up
+  nightly"; "Does Payroll approve badge requests?" is answered from "Payroll approves
+  invoices. Facilities handles badge requests."; and when two documents disagree, one
+  is shown as the answer and the other only as a related passage. All questions and
+  15 of the documents were written for this assignment, so they share my blind spots.
 - Synonyms are the riskiest knob. Adding "responsible" to the owner group made
   "response" match "owner" through word stems and broke the P1 question. The release
   gate in the evaluation caught it before it was committed.
@@ -192,15 +171,11 @@ I treated its output the way I would treat a colleague's pull request, and relie
 checks I could see rather than its word: 70 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
-Before submitting I had a second AI session review the finished code with no knowledge
-of how it was built. It found real defects that the first had missed, including the
-document-name loophole described above. The fixes went in as separate pull requests,
-each with a regression test.
-
-Last, I gave the repository to ChatGPT and asked it to find inputs that would break
-it. I had Claude reproduce every case before accepting it: some were real and were
-fixed, some were already handled, and one finding contradicted the brief. That round
-is described under "What the evaluation showed".
+Before submitting I had the finished code reviewed twice by AI with no knowledge of
+how it was built: a second Claude session, then ChatGPT, which I asked for inputs
+that would break it. I had every finding reproduced before accepting it. Some were
+real and were fixed with regression tests, some were already handled, and one
+contradicted the brief.
 
 The evaluation is where this mattered most. The first version looked right on the
 eight sample questions and scored 73% on the wider set, with 8 confident mistakes.

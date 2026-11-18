@@ -81,6 +81,19 @@ not enough to answer, so a person can judge for themselves.
 Every answer has a "How this was decided" panel showing the coverage figure and which
 question words were and were not found.
 
+## Guardrails, and what is missing
+
+| Protects | What is in place |
+|---|---|
+| Answers | The three checks above run in code after any answerer. With no surviving quote the answer is "the documents do not contain an answer". |
+| The optional model | Off by default. It sees only passages that already passed the coverage check, cannot mark anything as supported, and falls back to the extractive answer if it fails. |
+| Prompt injection | By default there is no model to instruct. Text in a question or a document is matched or quoted, never followed. |
+| The application | Login on every data endpoint. Uploads limited to PDF and Markdown, 20 MB each, with paths stripped from file names. Questions capped at 500 characters. HTML in a question or document is shown as text. |
+
+Not built: rate limiting or lockout on login, content filtering, detection of personal
+data in uploads, and an audit log of questions. The default password and session key
+in `docker-compose.yml` are for local use; the Azure definition generates its own.
+
 ## API
 
 Every endpoint that reads or changes data needs a login; scripts can use HTTP Basic.
