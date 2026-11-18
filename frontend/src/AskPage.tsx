@@ -59,7 +59,10 @@ function Why({ a }: { a: Answer }) {
         </>
       )}
       <p className="muted small">
-        {a.retriever} retrieval · {a.answerer} answer · {a.documents_indexed} documents · {a.took_ms} ms
+        {a.retriever === "bm25" ? "Keyword search (BM25)" : `${a.retriever} search`}
+        {" · "}
+        {a.answerer === "extractive" ? "answer copied from the document, no AI model" : `answer written by ${a.answerer}, checked in code`}
+        {" · "}{a.documents_indexed} documents · {a.took_ms} ms
       </p>
     </details>
   );
