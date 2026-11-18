@@ -110,6 +110,16 @@ What I take from this:
   with a single topic word is now declined as too general unless that word is an
   acronym or a code such as "MFA" or "P1". The cost is that "Tell me about backups"
   is declined too.
+- A last pass of about 120 odd questions typed against the 20 documents found more of
+  the same kind: "Do passwords expire?" answered from a passage about leave days
+  expiring, "Are backups kept for 90 days?" answered from a passage that happened to
+  contain "90 days", and "Who approves passwords?" answered with a ban, because
+  "approve" and "prohibited" shared a synonym group. Each got a general rule and a
+  test. Three I found and left, because fixing them needs meaning rather than words:
+  "How often are laptops backed up?" is answered with "File shares are backed up
+  nightly", "How many days can I work from the office?" with a sentence about desks at
+  an office, and "Who approves passwords?" with a sentence about the approved password
+  manager.
 - The honest figure for wording the system has not seen is the fresh split: 11 of 14
   answered, and that did not move with the fixes. The 3 it declined are wording gaps
   ("How much can I spend on a taxi?" against a table row that says "Limit"). In every
@@ -179,7 +189,7 @@ test corpus and the first drafts of these documents, and ran the tests and evalu
 My part was the decisions: the stack, the rule that support is decided in code, how
 duplicates and replacements should behave, what to leave out, and when to stop tuning.
 I treated its output the way I would treat a colleague's pull request, and relied on
-checks I could see rather than its word: 68 tests, the golden-set evaluation, a live
+checks I could see rather than its word: 70 tests, the golden-set evaluation, a live
 kill of the worker, and screenshots of the UI.
 
 Before submitting I had a second AI session review the finished code with no knowledge

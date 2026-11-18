@@ -156,6 +156,10 @@ def _synonym_groups() -> dict[str, frozenset[str]]:
     return {k: frozenset(v) for k, v in groups.items()}
 
 
+# Units of time say how much, not what about: "how many days" has no topic.
+UNIT_STEMS = frozenset(stem(w) for w in "second minute hour day week month year".split())
+
+
 @dataclass(frozen=True)
 class QueryTerm:
     stem: str
@@ -177,6 +181,12 @@ class QueryTerm:
     # Stands for the "not" in a negative question. Only a passage that states a
     # negative or an exception satisfies it.
     negation: bool = False
+
+    @property
+    def topic(self) -> bool:
+        """Does this term name what the question is about? Quantity words, the "not" of
+        a negative question, bare numbers and units of time do not."""
+        return not (self.frame or self.negation or self.stem.isdigit() or self.stem in UNIT_STEMS)
 
     def answered_by(self, text: str) -> bool:
         """For a frame term: does this text contain the kind of quantity asked for?"""
@@ -231,10 +241,16 @@ def query_terms(question: str) -> list[QueryTerm]:
         matches = {s}
         # "uncollected" can be answered by "not collected", never by "collected" alone.
         opposite = s[2:] if len(s) >= 6 and s.startswith("un") else ""
+        # The word a "who approves..." question turns on must be in the passage itself,
+        # or a form of the same word ("owns" / "owner"). A looser synonym is not enough
+        # there: "approve" shares a group with "allowed" and "prohibited", and a ban
+        # does not say who approves.
+        is_required = i in required_at and not frame
         if settings.use_synonyms:
-            matches |= _synonym_groups().get(s, frozenset())
+            group = _synonym_groups().get(s, frozenset())
+            matches |= {m for m in group if m[:3] == s[:3]} if is_required else group
         found.append((i, QueryTerm(stem=s, word=display(w), matches=frozenset(matches), frame=frame,
-                                   required=(i in required_at and not frame), opposite=opposite)))
+                                   required=is_required, opposite=opposite)))
     terms = []
     for n, (i, term) in enumerate(found):
         nxt = found[n + 1] if n + 1 < len(found) else None
