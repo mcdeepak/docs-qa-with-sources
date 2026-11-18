@@ -57,6 +57,9 @@ No model takes part in this decision.
      that itself states a negative or an exception and contains the negated word
      ("required"). "Unapproved" is matched by "not
      approved", never by "approved" alone.
+   - A question with only one topic word ("How was your day?", "help") is declined as
+     too general, unless the word is an acronym or code as typed ("MFA", "P1") or the
+     question also asks for a quantity.
    - "How long...?" needs a number with a unit ("35 days"). A bare number such as the
      7 in "vault 7" does not answer it, and the sentence shown is the one that states
      the quantity.
@@ -181,7 +184,7 @@ tests with a simulated model; it has not been run against a real model endpoint.
 ## Tests and evaluation
 
 ```bash
-make test        # 67 unit and integration tests
+make test        # 68 unit and integration tests
 make eval        # golden-set evaluation with release gates
 make sweep       # compare support thresholds on the dev split
 make eval-live   # the same questions through the running API, with latency

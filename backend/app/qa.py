@@ -1,4 +1,5 @@
 """The question pipeline: retrieve, check coverage, answer, check quotes."""
+import re
 import time
 from functools import lru_cache
 
@@ -57,6 +58,22 @@ def _passage(scored: ScoredHit) -> dict:
     }
 
 
+def _too_general(question: str, terms) -> str | None:
+    """The single topic word of a question, when one word is not enough to go on.
+
+    "How was your day?" and "help" each have one topic word, and any passage that
+    happens to contain it would look like a full match. One word is enough only when
+    it is an acronym or a code as typed ("MFA", "P1"), or when the question also asks
+    for a quantity ("How long must a password be?"). Otherwise returns that word."""
+    topic = [t for t in terms if not t.frame and not t.negation]
+    if len(topic) != 1 or len(topic) != len(terms):
+        return None
+    word = topic[0].word
+    typed = re.findall(rf"\b{re.escape(word)}\b", question, re.I)
+    code = any(any(ch.isdigit() for ch in w) or (w.isupper() and len(w) >= 2) for w in typed)
+    return None if code and not question.isupper() else word
+
+
 def ask(question: str, index=None, retriever=None, answerer=None, threshold=None) -> dict:
     started = time.perf_counter()
     index = index or corpus.current()
@@ -83,6 +100,15 @@ def ask(question: str, index=None, retriever=None, answerer=None, threshold=None
 
     hits = retriever.search(index, question, settings.top_k)
     scored = score_hits(index, terms, hits)
+
+    # A question with a single ordinary word ("How was your day?", "help") says nothing
+    # about which passage is wanted. It is declined as too general.
+    vague = _too_general(question, terms)
+    if vague:
+        result["closest"] = [_passage(s) for s in scored[:2]]
+        return done(f"The question is too general: \u201c{vague}\u201d is its only topic word. "
+                    "Please ask something more specific.")
+
     allowed = passing(scored, threshold)
     if not allowed:
         # Shown as "closest passages" so a person can see why we declined.

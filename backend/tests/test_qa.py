@@ -275,3 +275,18 @@ def test_a_negative_question_needs_the_negated_word_in_the_passage(sample_index)
     # A negative question the documents do answer is still answered.
     index = one_document("MFA is not required for the guest wifi.\n")
     assert ask(index, "When isn't MFA required?")["supported"] is True
+
+
+def test_a_question_with_one_ordinary_word_is_declined_as_too_general(sample_index):
+    """Regression: "How was your day?" has one topic word, "day", and was answered with
+    "Backups are retained for 35 days"."""
+    for small_talk in ["How was your day?", "help", "what's up", "How is your week going?",
+                       "Tell me about backups"]:
+        result = ask(sample_index, small_talk)
+        assert result["supported"] is False, small_talk
+        assert "too general" in result["reason"]
+    # One word is enough when it is an acronym or a code...
+    assert ask(sample_index, "What is a P1?")["supported"] is True
+    assert ask(sample_index, "What is MFA?")["supported"] is True
+    # ...or when the question also asks for a quantity.
+    assert ask(sample_index, "How long must a password be?")["supported"] is True
